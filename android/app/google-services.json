@@ -1,0 +1,163 @@
+{
+  "project_info": {
+    "project_number": "1070089202147",
+    "firebase_url": "https://fullqueso-menu-default-rtdb.firebaseio.com",
+    "project_id": "fullqueso-menu",
+    "storage_bucket": "fullqueso-menu.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:48c5c9a4e74c86810898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.counterqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:811d2fc0e63ad9bc0898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.eventoqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:a18daf35ee0c49180898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.filaqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:3381dd9cb73dbec60898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.fullqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:ce5f0a09b7d004af0898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.moto"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:6d6be2647c2ef8930898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.motoqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:fedd68d98e98abdd0898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.tiendaqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1070089202147:android:8002fa650c2217bd0898d6",
+        "android_client_info": {
+          "package_name": "com.fullqueso.ubiiqueso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
