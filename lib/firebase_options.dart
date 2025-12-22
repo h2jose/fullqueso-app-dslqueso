@@ -62,7 +62,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBT7KB5LB9K72xW4Sh6hL_aaA0p59Wcmbw',
-    appId: '1:1070089202147:android:8002fa650c2217bd0898d6',
+    appId: '1:1070089202147:android:d378f2fc14dbdcf10898d6',
     messagingSenderId: '1070089202147',
     projectId: 'fullqueso-menu',
     databaseURL: 'https://fullqueso-menu-default-rtdb.firebaseio.com',
