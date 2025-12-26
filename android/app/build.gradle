@@ -12,6 +12,15 @@ plugins {
 dependencies {
   implementation platform('com.google.firebase:firebase-bom:33.13.0')
   implementation 'com.google.firebase:firebase-analytics'
+
+  // DSL SDK Dependencies
+  implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
+  implementation files('libs/nexgo-smartpos-sdk-v3.08.002_20240410.aar')
+  implementation files('libs/smartconnect_new_version.aar')
+  implementation 'com.google.code.gson:gson:2.10.1'
+  implementation 'androidx.appcompat:appcompat:1.6.1'
+  implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+  implementation 'androidx.annotation:annotation:1.7.0'
 }
 
 def localProperties = new Properties()
@@ -45,8 +54,8 @@ android {
 
     compileOptions {
         coreLibraryDesugaringEnabled true
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     dependencies {
@@ -54,7 +63,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
+        jvmTarget = JavaVersion.VERSION_11
     }
 
     defaultConfig {

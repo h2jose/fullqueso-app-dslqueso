@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Fullqueso UBII',
+      title: 'Fullqueso DSL',
       theme: themeApp(),
       initialRoute: user != null ? '/dashboard' : '/',
       routes: routes,

@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <queries>
+        <!-- DSL/NexGO Service Package -->
+        <package android:name="cn.nexgo.veslc" />
+
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="sms" />
@@ -19,7 +22,7 @@
         <!--#docregion android-queries-->
     </queries>
     <application
-        android:label="UbiiQueso"
+        android:label="DslQueso"
         android:name="${applicationName}"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher">

@@ -66,7 +66,7 @@ class _HomePageState extends State<HomePage> {
         final punto = SharedService.punto; // ej: "Punto 1"
         final parts = punto.split(' ');
         final puntoNumber = parts.length > 1 ? parts[1] : '0';
-        final operatorCode = 'UBII-$puntoNumber';
+        final operatorCode = 'DSL-$puntoNumber';
 
         // Guardar en Mongo Online para Cierre de Caja
         await saveCounterData({
@@ -80,8 +80,8 @@ class _HomePageState extends State<HomePage> {
         SharedService.shopId = myUser.shopId!;
         SharedService.shopCode = myUser.shopCode!;
         SharedService.shopName = myUser.shopCode!;
-        SharedService.displayName = myUser.name ?? 'UBII';
-        SharedService.operatorName = operator.toUpperCase() ?? 'FQ_UBII';
+        SharedService.displayName = myUser.name ?? 'DSL';
+        SharedService.operatorName = operator.toUpperCase() ?? 'FQ_DSL';
         SharedService.logon = 'YES';
         SharedService.operatorCode = operatorCode;
 
@@ -133,7 +133,7 @@ class _HomePageState extends State<HomePage> {
                           text: TextSpan(
                         children: [
                           TextSpan(
-                            text: 'UBII',
+                            text: 'DSL',
                             style: TextStyle(
                                 fontSize: 24.0,
                                 fontWeight: FontWeight.w900,
@@ -155,6 +155,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       )),
+                      const Text('Bancrecer', style: TextStyle(color: Colors.black38),),
                       const SizedBox(height: 25),
                        Container(
                           width: MediaQuery.of(context).size.width * 0.88,

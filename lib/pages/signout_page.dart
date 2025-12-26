@@ -7,6 +7,8 @@ import 'package:ubiiqueso/pages/home_page.dart';
 import 'package:ubiiqueso/services/counter_service.dart';
 import 'package:ubiiqueso/services/shared_service.dart';
 import 'package:ubiiqueso/theme/color.dart';
+import 'package:ubiiqueso/infrastructure/functions/nexgo_funtions/nexgo_funtions.dart';
+import 'package:ubiiqueso/infrastructure/models/settlement_response_sdk_model.dart';
 
 import '../components/common/show_alert.dart';
 
@@ -18,39 +20,80 @@ class SignoutPage extends StatefulWidget {
 }
 
 class _SignoutPageState extends State<SignoutPage> {
-  static const platform = MethodChannel('com.fullqueso.ubiiqueso/channel');
+  final DoTransaction _dslService = DoTransaction();
 
   bool isBack = true;
   bool finished = false;
-  // Lista para almacenar la respuesta
-  List<Map<String, String>> responseData = [];
+  bool isProcessing = false;
+  String settlementResult = '';
 
-  // Método para lanzar el intent y recibir la respuesta
-  void _launchIntent(String transType, String amount) async {
+  // Método para procesar settlement con DSL
+  void _procesarSettlementDSL() async {
+    setState(() {
+      isProcessing = true;
+    });
+
     try {
-      final Map<Object?, Object?> result = await platform.invokeMethod('getResponse', {
-        'transType': transType,
-        'amount': amount,
-        'logon': "NO"
-      });
+      // Llamar a DSL doTransactionSettlement (transType: 4 = SETTLEMENT)
+      final result = await _dslService.doTransactionSettlement();
 
-      if (result != null) {
-        List<Map<String, String>> resultList = [];
-        result.forEach((key, value) {
-          resultList.add({'key': key.toString(), 'value': value.toString()});
-        });
+      // Parsear respuesta DSL
+      if (result is SettlementResponse) {
         setState(() {
-          responseData = resultList;
-          SharedService.logon = 'YES';
-          isBack = false;
-          finished = true;
+          // result == 0 significa éxito en DSL
+          if (result.result == 0) {
+            settlementResult = '''
+✅ CIERRE EXITOSO
+
+Total Ventas Débito: ${result.totalDebitCardSale ?? '0'}
+Total Ventas Crédito: ${result.totalCreditCardSale ?? '0'}
+Lote Débito: ${result.debitBatchNo ?? 'N/A'}
+Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
+''';
+            isBack = false;
+            finished = true;
+            isProcessing = false;
+          } else {
+            settlementResult = 'ERROR: ${result.result} - ${result.responseMessage ?? 'Error desconocido'}';
+            ShowAlert(context, "CIERRE RECHAZADO: $settlementResult", 'error');
+            isProcessing = false;
+            finished = false;
+          }
+        });
+      } else {
+        ShowAlert(context, "Error: Respuesta inválida del POS", 'error');
+        setState(() {
+          isProcessing = false;
+          finished = false;
         });
       }
-    } on PlatformException catch (e) {
-      ShowAlert(context, e.message ?? 'Error Desconocido', 'error');
-      print("Error obteniendo la respuesta del intent: $e");
+    } catch (e) {
+      print("Error procesando settlement DSL: $e");
+      ShowAlert(context, "Error al procesar cierre: $e", 'error');
+      setState(() {
+        isProcessing = false;
+        finished = false;
+      });
     }
   }
+
+  @override
+  void initState() {
+    super.initState();
+    _initDSLService();
+  }
+
+  void _initDSLService() async {
+    try {
+      await _dslService.bindService();
+      // Delay obligatorio de 500ms después de bindService
+      await Future.delayed(const Duration(milliseconds: 500));
+      print("DSL Service inicializado correctamente para settlement");
+    } catch (e) {
+      print("Error inicializando DSL Service: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -64,13 +107,7 @@ class _SignoutPageState extends State<SignoutPage> {
             children: [
               const SizedBox(height: 20),
               if (!finished) ElevatedButton(
-                onPressed: () {
-                  _launchIntent('SETTLEMENT', '0');
-                  setState(() {
-                    isBack = false;
-                    finished = true;
-                  });
-                },
+                onPressed: isProcessing ? null : _procesarSettlementDSL,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColor.primary, // Background color
                   foregroundColor: Colors.white, // Text color
@@ -78,21 +115,30 @@ class _SignoutPageState extends State<SignoutPage> {
                   textStyle: const TextStyle(fontWeight: FontWeight.bold),
                   minimumSize: const Size(double.infinity, 50), // Full width button
                 ),
-                child: const Text('Cerrar Punto', textScaler: TextScaler.linear(1.5),),
+                child: isProcessing
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Cerrar Punto', textScaler: TextScaler.linear(1.5)),
               ),
               const SizedBox(height: 20),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: responseData.length,
-                  itemBuilder: (context, index) {
-                    final data = responseData[index];
-                    return ListTile(
-                      title: Text(data['key'] ?? 'No Key'),
-                      subtitle: Text(data['value'] ?? 'No Value'),
-                    );
-                  },
+              if (settlementResult.isNotEmpty)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        settlementResult,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
         ),

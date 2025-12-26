@@ -13,6 +13,9 @@ import 'package:ubiiqueso/utils/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:intl/intl.dart';
+import 'package:ubiiqueso/infrastructure/functions/nexgo_funtions/nexgo_funtions.dart';
+import 'package:ubiiqueso/infrastructure/functions/help_funtions/help_funtions.dart';
+import 'package:ubiiqueso/infrastructure/models/record_response_model.dart';
 
 class CheckoutPage extends StatefulWidget {
   final List<ProductModel> products;
@@ -39,10 +42,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String confirmNum = "";
   String referencia = "";
   String tipoTarjeta = "";
-  String terminal = "UBII";
+  String terminal = "DSL";
 
-  static const platform = MethodChannel('com.fullqueso.ubiiqueso/channel');
-  List<Map<String, String>> responseData = [];
+  final DoTransaction _dslService = DoTransaction();
+  final PrinterPos _printer = PrinterPos();
 
   FirebaseFirestore db = FirebaseFirestore.instance;
   final TextEditingController _beeperController = TextEditingController();
@@ -128,9 +131,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         source: 'express');
     checkout.customerId = _cedulaController.text;
 
-    final totalWithoutDot =
-        getTotalAmountBs().toStringAsFixed(2).replaceAll('.', '');
-    _launchIntent('PAYMENT', totalWithoutDot);
+    final totalBs = getTotalAmountBs().toStringAsFixed(2);
+    final totalWithoutDot = transformarAmountaEntero(totalBs);
+    _procesarPagoDSL(totalWithoutDot);
   }
 
   void _fillCheckout() {
@@ -232,18 +235,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
     checkout.shopLocation = '';
     checkout.shopDelivery = 0;
     checkout.shopWhatsapp = '';
-    checkout.terminal = 'UBII';
-    checkout.isUbii = true;
+    checkout.terminal = 'DSL';
+    checkout.isUbii = false;
     checkout.syncToLocal = true;
 
     SharedService.punto = selectedCodigoPunto;
   }
 
-  void _launchIntent(String transType, String amount) async {
-    final logon = SharedService.logon;
+  void _procesarPagoDSL(String amount) async {
     String numTicket = widget.ticketNumber.length > 6
         ? widget.ticketNumber.substring(widget.ticketNumber.length - 6)
         : widget.ticketNumber;
+
     try {
       checkout.statusId = 0;
       checkout.statusCurrent = 'Solicitado';
@@ -252,71 +255,104 @@ class _CheckoutPageState extends State<CheckoutPage> {
       checkout.paidPuntoBs = 0;
       checkout.paidPuntoUsd = 0;
 
-      _processCheckout(false); // Guardar sin finalizar el intent
-      String transId = checkout.customerId ?? '111111';
-      final Map<Object?, Object?> result =
-          await platform.invokeMethod('getResponse', {
-        'trans_id': transId,
-        'transType': transType,
-        'amount': amount,
-        'logon': logon,
-        'ticket': numTicket
-      });
-      List<Map<String, String>> resultList = [];
-      result.forEach((key, value) {
-        resultList.add({'key': key.toString(), 'value': value.toString()});
-      });
+      await _processCheckout(false); // Guardar sin finalizar
 
+      String cardholderId = checkout.customerId ?? '111111';
+      String waiterNum = SharedService.operatorCode;
+
+      // Llamar a DSL doTransaction (transType: 1 = PAYMENT)
+      final result = await _dslService.doTransaction(
+        amount,
+        cardholderId,
+        waiterNum,
+        numTicket,
+        1, // transType: 1 = PAYMENT
+      );
+
+      // Parsear respuesta DSL
+      if (result is RecordResponse) {
+        setState(() {
+          // result == 0 significa éxito en DSL
+          if (result.result == 0) {
+            checkout.statusId = 2;
+            checkout.statusCurrent = 'Preparación';
+            checkout.totalPaid = totalPaid;
+            checkout.totalPaidBs = totalPaidBs;
+            checkout.paidPuntoBs = paidPuntoBs;
+            checkout.paidPuntoUsd = paidPuntoUsd;
+            checkout.terminal = result.terminalId ?? 'DSL';
+            checkout.isUbii = false;
+            checkout.ubiiLog = '${result.rrn ?? ''} | ${result.referenceNumber ?? ''}';
+
+            // IMPRIMIR COMPROBANTE
+            _imprimirComprobante(result);
+
+            _processCheckout(true); // Guardar y finalizar
+          } else {
+            ShowAlert(context, "PAGO RECHAZADO: ${result.result} - ${result.responseMessage ?? 'Error desconocido'}", 'error');
+            setState(() {
+              saving = false;
+            });
+            return;
+          }
+        });
+      } else {
+        ShowAlert(context, "Error: Respuesta inválida del POS", 'error');
+        setState(() {
+          saving = false;
+        });
+      }
+    } catch (e) {
+      print("Error procesando pago DSL: $e");
+      ShowAlert(context, "Error al procesar el pago: $e", 'error');
       setState(() {
-        responseData = resultList;
-        for (var item in responseData) {
-          if (item['key'] == 'TRANS_CODE_RESULT') {
-            codeResult = item['value']!;
-          }
-          if (item['key'] == 'TRANS_MESSAGE_RESULT') {
-            messageResult = item['value']!;
-          }
-          if (item['key'] == 'TRANS_CONFIRM_NUM') {
-            confirmNum = item['value']!;
-          }
-          if (item['key'] == 'REFERENCIA') {
-            referencia = item['value']!;
-          }
-          if (item['key'] == 'TERMINAL') {
-            terminal = item['value']!;
-            checkout.terminal = terminal;
-            checkout.isUbii = true;
-          }
-        }
-
-// TRANS_CODE_RESULT si es 00 es aprobado
-
-        if (codeResult == '00') {
-          SharedService.logon = 'NO';
-          checkout.statusId = 2;
-          checkout.statusCurrent = 'Preparación';
-          checkout.totalPaid = totalPaid;
-          checkout.totalPaidBs = totalPaidBs;
-          checkout.paidPuntoBs = paidPuntoBs;
-          checkout.paidPuntoUsd = paidPuntoUsd;
-          checkout.ubiiLog = '$referencia | $confirmNum';
-          _processCheckout(true); // Guardar y finalizar el intent
-        } else {
-          ShowAlert(context, "NO PASÓ: ($codeResult) $messageResult", 'error');
-          setState(() {
-            saving = false;
-          });
-          return;
-        }
+        saving = false;
       });
-    } on PlatformException catch (e) {
-      print("Error obteniendo la respuesta del intent: $e");
+    }
+  }
+
+  void _imprimirComprobante(RecordResponse response) async {
+    try {
+      final now = DateTime.now();
+      final fecha = DateFormat('dd/MM/yyyy').format(now);
+      final hora = DateFormat('HH:mm:ss').format(now);
+      final montoFormateado = getTotalAmountBs().toStringAsFixed(2);
+
+      await _printer.imprimirPos(
+        checkout.customer?.name ?? 'Cliente',
+        checkout.customer?.cedula ?? '',
+        montoFormateado,
+        '', // ctaContrato - no aplica
+        response.referenceNumber ?? '',
+        fecha,
+        hora,
+        response.batchNum ?? '',
+        '', // afiliado - extraer si está disponible
+        response.terminalId ?? '',
+        response.deviceSerial ?? '',
+        response.traceNumber ?? '',
+      );
+    } catch (e) {
+      print("Error imprimiendo comprobante: $e");
+      // No bloqueamos el flujo si falla la impresión
+    }
+  }
+
+  void _initDSLService() async {
+    try {
+      await _dslService.bindService();
+      // Delay obligatorio de 500ms después de bindService
+      await Future.delayed(const Duration(milliseconds: 500));
+      print("DSL Service inicializado correctamente");
+    } catch (e) {
+      print("Error inicializando DSL Service: $e");
     }
   }
 
   @override
   void initState() {
     super.initState();
+    _initDSLService();
     checkout = CheckoutModel();
     _montoController.text = NumberFormat.currency(locale: 'en_US', symbol: '')
         .format(getTotalAmountBs());
@@ -788,7 +824,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         phone: '$selectedPhoneCode${_telefonoController.text}',
         location: '',
         address: '',
-        source: 'UBII');
+        source: 'DSL');
     checkout.customerId = _cedulaController.text;
 
     _fillCheckout();
