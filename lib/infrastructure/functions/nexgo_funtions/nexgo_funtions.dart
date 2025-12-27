@@ -140,4 +140,24 @@ class PrinterPos {
       print(e);
     }
   }
+
+  // Imprimir Orden de Servicio
+  Future<void> imprimirOrdenServicio(
+    String ticket,
+    String cliente,
+    String fechaHora,
+    String operador,
+  ) async {
+    try {
+      final String result = await platform.invokeMethod('printOrdenServicio', {
+        'ticket': ticket,
+        'cliente': cliente,
+        'fechaHora': fechaHora,
+        'operador': operador,
+      });
+      print('Orden de servicio impresa: $result');
+    } on PlatformException catch (e) {
+      print("Error imprimiendo orden: ${e.message}");
+    }
+  }
 }

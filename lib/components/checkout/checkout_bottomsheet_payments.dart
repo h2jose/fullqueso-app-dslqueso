@@ -15,6 +15,7 @@ import 'package:ubiiqueso/utils/bank_data.dart';
 import 'package:ubiiqueso/utils/constants.dart';
 import 'package:ubiiqueso/utils/show_error_container.dart';
 import 'package:http/http.dart' as http;
+import 'package:ubiiqueso/infrastructure/functions/nexgo_funtions/nexgo_funtions.dart';
 
 class CheckoutBottomsheetPayments extends StatefulWidget {
   final CheckoutModel checkout;
@@ -35,6 +36,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
   FirebaseFirestore db = FirebaseFirestore.instance;
   bool saving = false;
   bool loading = false;
+  final PrinterPos _printer = PrinterPos();
 
 
   // Pago movil
@@ -286,6 +288,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
         checkout.conciliacionBdv = ConciliacionBdv();
         checkout.isBdv = false;
       });
+      await _imprimirOrdenServicio();
       _processCheckout();
         return;
     }
@@ -399,6 +402,31 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
       setState(() {
         saving = false;
       });
+    }
+  }
+
+  Future<void> _imprimirOrdenServicio() async {
+    try {
+      // Formatear ticket (últimos 6 dígitos)
+      String ticket = checkout.ticket ?? '';
+      if (ticket.length > 6) {
+        ticket = ticket.substring(ticket.length - 6);
+      }
+
+      // Formatear cliente (tipo-cedula)
+      String cliente = '${checkout.customer?.tipo ?? 'V'}-${checkout.customer?.cedula ?? ''}';
+
+      // Formatear fecha y hora actual
+      final now = DateTime.now();
+      String fechaHora = DateFormat('dd/MM/yyyy HH:mm').format(now);
+
+      // Obtener operador
+      String operador = SharedService.operatorName;
+
+      // Imprimir orden de servicio
+      await _printer.imprimirOrdenServicio(ticket, cliente, fechaHora, operador);
+    } catch (e) {
+      log('Error imprimiendo orden de servicio: $e');
     }
   }
 

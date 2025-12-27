@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:ubiiqueso/components/checkout/checkout.dart';
@@ -243,7 +244,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _procesarPagoDSL(String amount) async {
-    String numTicket = widget.ticketNumber.length > 6
+    String numOrder = widget.ticketNumber.length > 6
         ? widget.ticketNumber.substring(widget.ticketNumber.length - 6)
         : widget.ticketNumber;
 
@@ -255,17 +256,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       checkout.paidPuntoBs = 0;
       checkout.paidPuntoUsd = 0;
 
-      await _processCheckout(false); // Guardar sin finalizar
+      await _processCheckout(false); // Guardar sin finalizar (Pedido sin pago)
 
       String cardholderId = checkout.customerId ?? '111111';
-      String waiterNum = SharedService.operatorCode;
 
       // Llamar a DSL doTransaction (transType: 1 = PAYMENT)
       final result = await _dslService.doTransaction(
         amount,
         cardholderId,
-        waiterNum,
-        numTicket,
+        '1',
+        numOrder,
         1, // transType: 1 = PAYMENT
       );
 
@@ -289,7 +289,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
             _processCheckout(true); // Guardar y finalizar
           } else {
-            ShowAlert(context, "PAGO RECHAZADO: ${result.result} - ${result.responseMessage ?? 'Error desconocido'}", 'error');
+            // Pago rechazado - imprimir comprobante de error
+            _imprimirComprobanteError(result);
+
+            ShowAlert(context, "Error procesando pago - Código: ${result.errorCode}", 'error');
             setState(() {
               saving = false;
             });
@@ -303,8 +306,43 @@ class _CheckoutPageState extends State<CheckoutPage> {
         });
       }
     } catch (e) {
-      print("Error procesando pago DSL: $e");
-      ShowAlert(context, "Error al procesar el pago: $e", 'error');
+      // Intentar extraer información del error para imprimir comprobante
+      RecordResponse? errorResponse;
+      String errorMessage = "Error procesando pago";
+
+      try {
+        // Intentar parsear el JSON del error
+        final errorString = e.toString();
+
+        // Extraer JSON del mensaje de error
+        final jsonStart = errorString.indexOf('{');
+        final jsonEnd = errorString.lastIndexOf('}');
+
+        if (jsonStart != -1 && jsonEnd != -1) {
+          final jsonString = errorString.substring(jsonStart, jsonEnd + 1);
+          final errorJson = jsonDecode(jsonString);
+
+          // Crear RecordResponse del error
+          errorResponse = RecordResponse.fromJson(errorJson);
+
+          // Extraer errorCode para mensaje
+          final errorCode = errorJson['errorCode'] ?? errorJson['result'] ?? 'desconocido';
+          errorMessage = "Error procesando pago - Código: $errorCode";
+        } else {
+          errorMessage = "Error procesando pago";
+        }
+      } catch (parseError) {
+        errorMessage = "Error procesando pago";
+      }
+
+      // Mostrar alerta con mensaje limpio
+      ShowAlert(context, errorMessage, 'error');
+
+      // IMPRIMIR COMPROBANTE DE ERROR si se pudo parsear
+      if (errorResponse != null) {
+        _imprimirComprobanteError(errorResponse);
+      }
+
       setState(() {
         saving = false;
       });
@@ -333,7 +371,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
         response.traceNumber ?? '',
       );
     } catch (e) {
-      print("Error imprimiendo comprobante: $e");
+      // No bloqueamos el flujo si falla la impresión
+    }
+  }
+
+  void _imprimirComprobanteError(RecordResponse errorResponse) async {
+    try {
+      final now = DateTime.now();
+      final fecha = DateFormat('dd/MM/yyyy').format(now);
+      final hora = DateFormat('HH:mm:ss').format(now);
+      final montoFormateado = getTotalAmountBs().toStringAsFixed(2);
+
+      // Imprimir comprobante con información del error
+      await _printer.imprimirPos(
+        checkout.customer?.name ?? 'Cliente',
+        checkout.customer?.cedula ?? '',
+        montoFormateado,
+        'ERROR', // Indicador de error en lugar de ctaContrato
+        errorResponse.referenceNumber ?? 'N/A',
+        fecha,
+        hora,
+        errorResponse.batchNum ?? 'N/A',
+        'ERROR', // Marcador de error
+        errorResponse.terminalId ?? 'N/A',
+        errorResponse.deviceSerial ?? 'N/A',
+        errorResponse.traceNumber ?? 'N/A',
+      );
+    } catch (e) {
       // No bloqueamos el flujo si falla la impresión
     }
   }
@@ -343,9 +407,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       await _dslService.bindService();
       // Delay obligatorio de 500ms después de bindService
       await Future.delayed(const Duration(milliseconds: 500));
-      print("DSL Service inicializado correctamente");
     } catch (e) {
-      print("Error inicializando DSL Service: $e");
+      // Error inicializando DSL Service
     }
   }
 

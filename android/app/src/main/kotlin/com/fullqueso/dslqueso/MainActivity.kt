@@ -84,6 +84,16 @@ class MainActivity : FlutterActivity() {
                         printerTest(fechaTest, horaTest, this, result)
                     }
 
+                    "printOrdenServicio" -> {
+                        printOrdenServicio(
+                            ticket = call.argument<String>("ticket"),
+                            cliente = call.argument<String>("cliente"),
+                            fechaHora = call.argument<String>("fechaHora"),
+                            operador = call.argument<String>("operador"),
+                            result = result
+                        )
+                    }
+
                     else -> {
                         result.notImplemented()
                     }
@@ -322,6 +332,44 @@ class MainActivity : FlutterActivity() {
         } catch (e: IOException) {
             e.printStackTrace()
             result.error("ASSET_ERROR", "Error cargando logo: ${e.message}", null)
+        }
+    }
+
+    // =====================================================================
+    //  PRINT ORDEN DE SERVICIO
+    // =====================================================================
+    private fun printOrdenServicio(
+        ticket: String?,
+        cliente: String?,
+        fechaHora: String?,
+        operador: String?,
+        result: MethodChannel.Result
+    ) {
+        try {
+            initPrinter()
+
+            printer?.apply {
+                appendPrnStr("================================", 24, AlignEnum.CENTER, false)
+                appendPrnStr("ORDEN DE SERVICIO", 28, AlignEnum.CENTER, true)
+                appendPrnStr("================================\n", 24, AlignEnum.CENTER, false)
+
+                appendPrnStr("ORDEN: $ticket", 24, AlignEnum.LEFT, false)
+                appendPrnStr("Cliente: $cliente", 24, AlignEnum.LEFT, false)
+                appendPrnStr("Fecha: $fechaHora", 24, AlignEnum.LEFT, false)
+                appendPrnStr("Operado por: $operador\n\n\n\n\n", 24, AlignEnum.LEFT, false)
+
+                startPrint(false, object : OnPrintListener {
+                    override fun onPrintResult(code: Int) {
+                        if (code == 0) {
+                            result.success("printed")
+                        } else {
+                            result.error("PRINT_ERROR", "Código: $code", null)
+                        }
+                    }
+                })
+            }
+        } catch (e: Exception) {
+            result.error("PRINT_EXCEPTION", e.message, null)
         }
     }
 
