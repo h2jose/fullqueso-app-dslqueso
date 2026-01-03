@@ -144,6 +144,7 @@ class PrinterPos {
   // Imprimir Orden de Servicio
   Future<void> imprimirOrdenServicio(
     String ticket,
+    String cedula,
     String cliente,
     String fechaHora,
     String operador,
@@ -151,6 +152,7 @@ class PrinterPos {
     try {
       final String result = await platform.invokeMethod('printOrdenServicio', {
         'ticket': ticket,
+        'cedula': cedula,
         'cliente': cliente,
         'fechaHora': fechaHora,
         'operador': operador,

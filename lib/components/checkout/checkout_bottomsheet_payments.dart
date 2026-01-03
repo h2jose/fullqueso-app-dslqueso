@@ -414,17 +414,20 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
       }
 
       // Formatear cliente (tipo-cedula)
-      String cliente = '${checkout.customer?.tipo ?? 'V'}-${checkout.customer?.cedula ?? ''}';
+      String cedula = '${checkout.customer?.tipo ?? 'V'}-${checkout.customer?.cedula ?? ''}';
+      String cliente = '${checkout.customer?.name ?? ''}';
 
       // Formatear fecha y hora actual
       final now = DateTime.now();
       String fechaHora = DateFormat('dd/MM/yyyy HH:mm').format(now);
 
+      print('DEBUG fechaHora generada: $fechaHora');
+
       // Obtener operador
       String operador = SharedService.operatorName;
 
       // Imprimir orden de servicio
-      await _printer.imprimirOrdenServicio(ticket, cliente, fechaHora, operador);
+      await _printer.imprimirOrdenServicio(ticket, cedula, cliente, fechaHora, operador);
     } catch (e) {
       log('Error imprimiendo orden de servicio: $e');
     }

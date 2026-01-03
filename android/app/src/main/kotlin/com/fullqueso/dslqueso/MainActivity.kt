@@ -87,6 +87,7 @@ class MainActivity : FlutterActivity() {
                     "printOrdenServicio" -> {
                         printOrdenServicio(
                             ticket = call.argument<String>("ticket"),
+                            cedula = call.argument<String>("cedula"),
                             cliente = call.argument<String>("cliente"),
                             fechaHora = call.argument<String>("fechaHora"),
                             operador = call.argument<String>("operador"),
@@ -225,11 +226,11 @@ class MainActivity : FlutterActivity() {
                 appendPrnStr("Cliente: $fullName", 24, AlignEnum.LEFT, false)
                 appendPrnStr("CI: $ciClient", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Monto: $amount", 24, AlignEnum.LEFT, false)
-                appendPrnStr("Contrato: $ctaContrato", 24, AlignEnum.LEFT, false)
+                // appendPrnStr("Contrato: $ctaContrato", 24, AlignEnum.LEFT, false)?
                 appendPrnStr("Referencia: $referenceNo", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Fecha: $fecha $hora", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Lote: $lote", 24, AlignEnum.LEFT, false)
-                appendPrnStr("Afiliado: $afiliado", 24, AlignEnum.LEFT, false)
+                // appendPrnStr("Afiliado: $afiliado", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Terminal: $terminal", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Serial: $serial", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Trace: $trace\n\n", 24, AlignEnum.LEFT, false)
@@ -340,6 +341,7 @@ class MainActivity : FlutterActivity() {
     // =====================================================================
     private fun printOrdenServicio(
         ticket: String?,
+        cedula: String?,
         cliente: String?,
         fechaHora: String?,
         operador: String?,
@@ -350,10 +352,11 @@ class MainActivity : FlutterActivity() {
 
             printer?.apply {
                 appendPrnStr("================================", 24, AlignEnum.CENTER, false)
-                appendPrnStr("ORDEN DE SERVICIO", 28, AlignEnum.CENTER, true)
+                appendPrnStr("ORDEN $ticket", 28, AlignEnum.CENTER, true)
                 appendPrnStr("================================\n", 24, AlignEnum.CENTER, false)
 
                 appendPrnStr("ORDEN: $ticket", 24, AlignEnum.LEFT, false)
+                appendPrnStr("Cedula: $cedula", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Cliente: $cliente", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Fecha: $fechaHora", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Operado por: $operador\n\n\n\n\n", 24, AlignEnum.LEFT, false)
