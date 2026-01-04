@@ -4,6 +4,7 @@ import 'package:ubiiqueso/components/common/common.dart';
 import 'package:ubiiqueso/models/models.dart';
 import 'package:ubiiqueso/models/shop.dart' as shop;
 import 'package:ubiiqueso/pages/checkout_page.dart';
+import 'package:ubiiqueso/pages/signout_page.dart';
 import 'package:ubiiqueso/services/cart_service.dart';
 import 'package:ubiiqueso/services/rate_service.dart';
 import 'package:ubiiqueso/services/shared_service.dart';
@@ -173,6 +174,90 @@ class _DashboardPageState extends State<DashboardPage> {
     return quantities;
   }
 
+  void _checkSettlementRequired() {
+    final lastSettlement = SharedService.lastSettlementDate;
+
+    // Si está vacío, es la primera vez o no se ha hecho settlement aún
+    if (lastSettlement.isEmpty) return;
+
+    try {
+      final lastDate = DateFormat('yyyy-MM-dd').parse(lastSettlement);
+      final today = DateTime.now();
+
+      // Verificar si son días diferentes
+      final isDifferentDay = lastDate.year != today.year ||
+                             lastDate.month != today.month ||
+                             lastDate.day != today.day;
+
+      if (isDifferentDay) {
+        // Mostrar dialog bloqueante
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showDialog(
+            context: context,
+            barrierDismissible: false, // No se puede cerrar tocando afuera
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.orange, size: 30),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Cierre de Lote Pendiente',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Debe realizar el cierre de lote antes de continuar con las ventas.',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Último cierre: ${DateFormat('dd/MM/yyyy').format(lastDate)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColor.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20.0,
+                      vertical: 12.0,
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context); // Cerrar dialog
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SignoutPage(),
+                      ),
+                    );
+                  },
+                  child: const Text('Ir a Cierre de Lote'),
+                ),
+              ],
+            ),
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error verificando settlement: $e');
+    }
+  }
+
   Future<void> fetchRate() async {
     rate = await RateService().fetchRate();
   }
@@ -258,6 +343,26 @@ class _DashboardPageState extends State<DashboardPage> {
   // }
 
   void _goToCheckout() async {
+    // Verificar si requiere cierre de lote antes de continuar
+    final lastSettlement = SharedService.lastSettlementDate;
+    if (lastSettlement.isNotEmpty) {
+      try {
+        final lastDate = DateFormat('yyyy-MM-dd').parse(lastSettlement);
+        final today = DateTime.now();
+        final isDifferentDay = lastDate.year != today.year ||
+                               lastDate.month != today.month ||
+                               lastDate.day != today.day;
+
+        if (isDifferentDay) {
+          // Mostrar alerta y detener navegación al checkout
+          _checkSettlementRequired();
+          return;
+        }
+      } catch (e) {
+        debugPrint('Error verificando settlement en checkout: $e');
+      }
+    }
+
     // Generar timestamp y número de orden
     final now = DateTime.now();
     final int timestamp = (now.millisecondsSinceEpoch / 1000).round();
@@ -284,7 +389,10 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    fetchRate().then((_) => fetchProducts());
+    fetchRate().then((_) => fetchProducts()).then((_) {
+      // Verificar si requiere cierre de lote después de cargar productos
+      _checkSettlementRequired();
+    });
   }
 
   @override

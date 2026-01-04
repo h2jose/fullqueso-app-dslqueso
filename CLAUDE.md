@@ -316,3 +316,177 @@ Current version: **2.5.12+17** (defined in pubspec.yaml)
 **Native Android (build.gradle)**:
 - `com.google.code.gson:gson` - JSON serialization for NexGO responses
 - NexGO SDK libraries (oaf-apiv3, smartconnect) - Payment and printer integration
+
+## Daily Settlement Control System
+
+### Overview
+
+The app implements a mandatory daily settlement (batch closure) control system to ensure operators cannot start a new sales day without closing the previous day's transactions on the POS terminal. This is critical for financial reconciliation and POS terminal management.
+
+### Purpose
+
+**Business Requirement**: POS terminals require end-of-day settlement (cierre de lote) to consolidate transactions and clear the terminal's batch. If an operator forgets to close the batch at the end of their shift, they must complete it before processing any new sales.
+
+**Technical Implementation**: The system tracks the last successful settlement date and prevents checkout operations if the current day is different from the last settlement date.
+
+### Architecture
+
+#### Components
+
+**1. Data Persistence** (`lib/services/shared_service.dart`)
+- **Variable**: `lastSettlementDate` (String, format: "yyyy-MM-dd")
+- **Storage**: SharedPreferences (persists across app restarts and device reboots)
+- **Lifecycle**: Set on successful settlement, never reset on logout (intentional)
+- **Location**: Lines 24, 40-47
+
+**2. Settlement Recording** (`lib/pages/signout_page.dart`)
+- **Trigger**: Successful DSL settlement transaction (`result.result == 0`)
+- **Action**: Saves current date to `SharedService.lastSettlementDate`
+- **Location**: Line 47
+- **Code**:
+  ```dart
+  SharedService.lastSettlementDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  ```
+
+**3. Settlement Verification** (`lib/pages/dashboard_page.dart`)
+- **Method**: `_checkSettlementRequired()` (lines 176-258)
+- **Verification Points**:
+  - **InitState** (line 374): After products load, checks immediately upon dashboard entry
+  - **Checkout** (line 358): Before navigation to checkout, blocks transaction if settlement pending
+
+### How It Works
+
+#### Settlement Date Tracking
+
+1. **First Use**: `lastSettlementDate` is empty → No verification performed
+2. **After First Settlement**: Date is saved (e.g., "2026-01-03")
+3. **Same Day**: Comparisons show same day → Normal operations continue
+4. **Next Day**: Comparison detects different day → Alert triggered
+
+#### Date Comparison Logic
+
+```dart
+final lastDate = DateFormat('yyyy-MM-dd').parse(lastSettlement);
+final today = DateTime.now();
+final isDifferentDay = lastDate.year != today.year ||
+                       lastDate.month != today.month ||
+                       lastDate.day != today.day;
+```
+
+#### Blocking Dialog
+
+When settlement is required, a **non-dismissible** dialog appears with:
+- **Title**: "Cierre de Lote Pendiente" with warning icon
+- **Message**: "Debe realizar el cierre de lote antes de continuar con las ventas."
+- **Last Settlement Date**: Shows formatted date (dd/MM/yyyy)
+- **Action**: Single button "Ir a Cierre de Lote" → Navigates to `SignoutPage`
+- **Behavior**: `barrierDismissible: false` (cannot be dismissed by tapping outside)
+
+### Verification Flow
+
+#### Scenario 1: Normal Daily Operations
+1. Day 1: Operator logs in → Sells → Closes settlement → Logs out
+2. `lastSettlementDate` = "2026-01-03"
+3. Day 2: Operator logs in → Dashboard loads → No alert (same day or first login of new day)
+4. When attempting checkout → Verification runs → Alert blocks checkout
+5. Operator forced to `SignoutPage` → Completes settlement
+6. `lastSettlementDate` updates to "2026-01-04"
+7. Returns to dashboard → Can now process sales
+
+#### Scenario 2: Forgotten Settlement
+1. Day 1: Operator logs in → Sells → **Forgets to close settlement** → Logs out
+2. `lastSettlementDate` = "2026-01-02" (previous settlement)
+3. Day 2: Operator logs in → Dashboard loads → **Alert appears immediately**
+4. If alert closed accidentally → Attempting checkout → **Alert appears again**
+5. Forced to complete settlement before any sales
+
+#### Scenario 3: App Left Open Overnight
+1. Day 1 (23:00): Operator working, app open
+2. Midnight passes → Now Day 2
+3. Operator attempts checkout → Verification detects day change
+4. Alert blocks checkout → Must complete settlement
+
+### Double Verification Strategy
+
+**Why Two Checkpoints?**
+
+1. **InitState Verification** (Primary)
+   - **When**: After `fetchProducts()` completes
+   - **Purpose**: Early warning - alerts user immediately upon dashboard entry
+   - **User Impact**: Cannot ignore or miss the requirement
+   - **Performance**: No impact (runs after async product loading)
+
+2. **Checkout Verification** (Failsafe)
+   - **When**: Start of `_goToCheckout()` method
+   - **Purpose**: Safety barrier - ensures no sales can proceed if settlement pending
+   - **User Impact**: Blocks transaction even if initial alert was somehow bypassed
+   - **Performance**: Negligible (simple date string comparison)
+
+**Benefits**:
+- ✅ Redundant protection against forgotten settlements
+- ✅ Handles edge cases (app backgrounded, alert dismissed, etc.)
+- ✅ Minimal performance overhead (instant date comparison)
+
+### Technical Details
+
+#### Date Format
+- **Storage**: "yyyy-MM-dd" (e.g., "2026-01-03")
+- **Display**: "dd/MM/yyyy" (e.g., "03/01/2026")
+- **Timezone**: Uses device local time via `DateTime.now()`
+
+#### Error Handling
+- All date parsing wrapped in `try-catch` blocks
+- Parse failures logged with `debugPrint()`
+- Failed verification allows operation to continue (fail-open for safety)
+
+#### Navigation
+- Alert → SignoutPage uses `Navigator.push()` (modal navigation)
+- User must complete or cancel settlement to return to dashboard
+- After settlement → `lastSettlementDate` updates → Verification passes
+
+### Testing Checklist
+
+**Manual Testing Scenarios**:
+
+1. **First Installation**
+   - [ ] Install app → Login → No alert appears
+   - [ ] Complete first settlement → Date saved correctly
+
+2. **Same Day Operations**
+   - [ ] Login → Sell → Checkout works without alert
+   - [ ] Multiple checkouts → No alerts
+
+3. **Next Day Without Settlement**
+   - [ ] Change device date to next day OR wait until midnight
+   - [ ] Open dashboard → Alert appears immediately
+   - [ ] Try checkout → Alert blocks transaction
+   - [ ] Complete settlement → Alert clears
+
+4. **App Persistence**
+   - [ ] Complete settlement → Close app
+   - [ ] Reopen app → No alert (same day)
+   - [ ] Change date → Reopen app → Alert appears
+
+5. **Logout Scenario**
+   - [ ] Complete settlement Day 1 → Logout
+   - [ ] Login Day 2 → Alert appears
+   - [ ] Verify `lastSettlementDate` persisted through logout
+
+### Code Locations Reference
+
+| Component | File | Lines | Description |
+|-----------|------|-------|-------------|
+| Data model | `lib/services/shared_service.dart` | 24, 40-47 | `lastSettlementDate` variable and getters/setters |
+| Settlement save | `lib/pages/signout_page.dart` | 47 | Updates date on successful settlement |
+| Verification method | `lib/pages/dashboard_page.dart` | 176-258 | `_checkSettlementRequired()` logic and dialog |
+| InitState check | `lib/pages/dashboard_page.dart` | 374 | First verification point |
+| Checkout check | `lib/pages/dashboard_page.dart` | 346-364 | Second verification point (failsafe) |
+
+### Future Enhancements
+
+**Potential Improvements**:
+- Add settlement reminder notifications at end of day (e.g., 22:00)
+- Track settlement history for audit trail
+- Admin override capability for emergency situations
+- Settlement status indicator on dashboard UI
+- Automatic settlement prompt after last transaction of day

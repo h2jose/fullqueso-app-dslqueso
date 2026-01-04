@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ubiiqueso/components/common/app_bar_text_widget.dart';
 import 'package:ubiiqueso/pages/home_page.dart';
@@ -42,6 +43,9 @@ class _SignoutPageState extends State<SignoutPage> {
         setState(() {
           // result == 0 significa éxito en DSL
           if (result.result == 0) {
+            // Guardar fecha del settlement exitoso
+            SharedService.lastSettlementDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
             settlementResult = '''
 ✅ CIERRE EXITOSO
 

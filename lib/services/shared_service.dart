@@ -21,6 +21,7 @@ class SharedService {
   static String _logon = 'YES';
   static bool _showImage = false;
   static String _counterId = '';
+  static String _lastSettlementDate = '';
 
   static Future init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -34,6 +35,15 @@ class SharedService {
   static set counterId(String counterId) {
     _counterId = counterId;
     _prefs.setString('counterId', counterId);
+  }
+
+  // LAST SETTLEMENT DATE
+  static String get lastSettlementDate {
+    return _prefs.getString('lastSettlementDate') ?? _lastSettlementDate;
+  }
+  static set lastSettlementDate(String lastSettlementDate) {
+    _lastSettlementDate = lastSettlementDate;
+    _prefs.setString('lastSettlementDate', lastSettlementDate);
   }
 
   // ZELLE
