@@ -66,7 +66,7 @@ class _HomePageState extends State<HomePage> {
         final punto = SharedService.punto; // ej: "Punto 1"
         final parts = punto.split(' ');
         final puntoNumber = parts.length > 1 ? parts[1] : '0';
-        final operatorCode = 'DSL-$puntoNumber';
+        final operatorCode = 'BCRECER-$puntoNumber';
 
         // Guardar en Mongo Online para Cierre de Caja
         await saveCounterData({
@@ -80,8 +80,8 @@ class _HomePageState extends State<HomePage> {
         SharedService.shopId = myUser.shopId!;
         SharedService.shopCode = myUser.shopCode!;
         SharedService.shopName = myUser.shopCode!;
-        SharedService.displayName = myUser.name ?? 'DSL';
-        SharedService.operatorName = operator.toUpperCase() ?? 'FQ_DSL';
+        SharedService.displayName = myUser.name ?? 'BCRECER';
+        SharedService.operatorName = operator.toUpperCase() ?? 'FQ_BCRECER';
         SharedService.logon = 'YES';
         SharedService.operatorCode = operatorCode;
 
@@ -130,23 +130,23 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Image.asset('assets/images/isologo2.png', width: 150),
                       RichText(
-                          text: TextSpan(
+                          text: const TextSpan(
                         children: [
+                          // TextSpan(
+                          //   text: 'BCrecer',
+                          //   style: TextStyle(
+                          //       fontSize: 24.0,
+                          //       fontWeight: FontWeight.w900,
+                          //       color: Colors.blueAccent[700]),
+                          // ),
                           TextSpan(
-                            text: 'DSL',
-                            style: TextStyle(
-                                fontSize: 24.0,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.blueAccent[700]),
-                          ),
-                          const TextSpan(
-                            text: 'FULL',
+                            text: 'BC',
                             style: TextStyle(
                                 fontSize: 24.0,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.black26),
                           ),
-                          const TextSpan(
+                          TextSpan(
                             text: 'QUESO',
                             style: TextStyle(
                                 fontSize: 24.0,
@@ -155,7 +155,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       )),
-                      const Text('Bancrecer', style: TextStyle(color: Colors.black38),),
+                      // const Text('Bancrecer', style: TextStyle(color: Colors.black38),),
                       const SizedBox(height: 25),
                        Container(
                           width: MediaQuery.of(context).size.width * 0.88,

@@ -43,7 +43,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String confirmNum = "";
   String referencia = "";
   String tipoTarjeta = "";
-  String terminal = "DSL";
+  String terminal = "BCRECER";
 
   final DoTransaction _dslService = DoTransaction();
   final PrinterPos _printer = PrinterPos();
@@ -236,7 +236,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     checkout.shopLocation = '';
     checkout.shopDelivery = 0;
     checkout.shopWhatsapp = '';
-    checkout.terminal = 'DSL';
+    checkout.terminal = 'BCRECER';
     checkout.isUbii = false;
     checkout.syncToLocal = true;
 
@@ -280,7 +280,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             checkout.totalPaidBs = totalPaidBs;
             checkout.paidPuntoBs = paidPuntoBs;
             checkout.paidPuntoUsd = paidPuntoUsd;
-            checkout.terminal = result.terminalId ?? 'DSL';
+            checkout.terminal = result.terminalId;
             checkout.isUbii = false;
             checkout.ubiiLog = '${result.rrn ?? ''} | ${result.referenceNumber ?? ''}';
 
@@ -887,7 +887,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         phone: '$selectedPhoneCode${_telefonoController.text}',
         location: '',
         address: '',
-        source: 'DSL');
+        source: 'BCRECER');
     checkout.customerId = _cedulaController.text;
 
     _fillCheckout();
