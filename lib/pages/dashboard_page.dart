@@ -32,7 +32,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Additional> tempAdditionals = [];
 
   String additional = 'xxxxx';
-  
+
   // Buscador
   TextEditingController searchController = TextEditingController();
   String searchQuery = '';
@@ -44,7 +44,7 @@ class _DashboardPageState extends State<DashboardPage> {
         filteredProducts = List.from(products);
       } else {
         filteredProducts = products
-            .where((product) => 
+            .where((product) =>
                 product.name!.toLowerCase().contains(query.toLowerCase()))
             .toList();
       }
@@ -103,7 +103,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return prod.useFlavour == true &&
            prod.codeFlavour != null &&
            prod.codeFlavour!.isNotEmpty &&
-           (prod.additional == null || 
+           (prod.additional == null ||
             prod.additional!.isEmpty ||
             prod.additional is String);
   }
@@ -114,7 +114,7 @@ class _DashboardPageState extends State<DashboardPage> {
         (p) => p.code == prod.codeFlavour,
         orElse: () => ProductModel(),
       );
-      
+
       if (flavourProduct.extras != null && flavourProduct.extras!.isNotEmpty) {
         prod.flavours = List<Extras>.from(flavourProduct.extras!);
       }
@@ -132,62 +132,66 @@ class _DashboardPageState extends State<DashboardPage> {
 
   String generateFlavourString(Map<String, int> quantities, List<Extras> flavours) {
     List<String> parts = [];
-    
+
     quantities.forEach((flavourId, qty) {
       if (qty > 0) {
         final flavour = flavours.firstWhere((f) => f.sId == flavourId);
         parts.add('$qty x ${flavour.name} | ${flavour.code}');
       }
     });
-    
+
     return parts.join(', ');
   }
 
   Map<String, int> parseFlavourString(String additionalString, List<Extras> flavours) {
     Map<String, int> quantities = {};
-    
+
     // Inicializar todos a 0
     for (var flavour in flavours) {
       quantities[flavour.sId!] = 0;
     }
-    
+
     if (additionalString.isEmpty) return quantities;
-    
+
     // Parsear: "3 x Past. CARNE | FQ0850, 2 x Past. POLLO | FQ0851"
     final parts = additionalString.split(',').map((e) => e.trim()).toList();
-    
+
     for (final part in parts) {
       final match = RegExp(r'^(\d+)\s*x\s*(.+?)\s*\|\s*(.+)$').firstMatch(part);
       if (match != null) {
         final qty = int.parse(match.group(1)!);
         final name = match.group(2)!.trim();
         final code = match.group(3)!.trim();
-        
+
         final flavour = flavours.where((f) => f.name == name || f.code == code).firstOrNull;
-        
+
         if (flavour != null) {
           quantities[flavour.sId!] = qty;
         }
       }
     }
-    
+
     return quantities;
   }
 
   void _checkSettlementRequired() {
     final lastSettlement = SharedService.lastSettlementDate;
+    final firstLogin = SharedService.firstLoginDate;
 
-    // Si está vacío, es la primera vez o no se ha hecho settlement aún
-    if (lastSettlement.isEmpty) return;
+    // Si nunca se ha hecho login, no hacer nada
+    if (firstLogin.isEmpty) return;
 
     try {
-      final lastDate = DateFormat('yyyy-MM-dd').parse(lastSettlement);
       final today = DateTime.now();
 
+      // Usar lastSettlement si existe, sino usar firstLogin
+      String dateToCompare = lastSettlement.isNotEmpty ? lastSettlement : firstLogin;
+      final compareDate = DateFormat('yyyy-MM-dd').parse(dateToCompare);
+
       // Verificar si son días diferentes
-      final isDifferentDay = lastDate.year != today.year ||
-                             lastDate.month != today.month ||
-                             lastDate.day != today.day;
+      final isDifferentDay = compareDate.year != today.year ||
+                             compareDate.month != today.month ||
+                             compareDate.day != today.day;
 
       if (isDifferentDay) {
         // Mostrar dialog bloqueante
@@ -218,7 +222,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Último cierre: ${DateFormat('dd/MM/yyyy').format(lastDate)}',
+                    lastSettlement.isNotEmpty
+                      ? 'Último cierre: ${DateFormat('dd/MM/yyyy').format(compareDate)}'
+                      : 'Primer login: ${DateFormat('dd/MM/yyyy').format(compareDate)}',
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
@@ -288,15 +294,15 @@ class _DashboardPageState extends State<DashboardPage> {
             })
             .where((prod) => prod.activeTienda == true)
             .toList();
-        
+
         // Cargar flavours para productos que los necesiten
         for (var prod in products) {
           loadFlavoursForProduct(prod);
         }
-        
+
         // Inicializar lista filtrada con todos los productos
         filteredProducts = List.from(products);
-        
+
         quantities = {for (var prod in products) prod.sId!: 0};
       });
     } else {
@@ -345,13 +351,20 @@ class _DashboardPageState extends State<DashboardPage> {
   void _goToCheckout() async {
     // Verificar si requiere cierre de lote antes de continuar
     final lastSettlement = SharedService.lastSettlementDate;
-    if (lastSettlement.isNotEmpty) {
+    final firstLogin = SharedService.firstLoginDate;
+
+    // Si hay primer login registrado, verificar settlement
+    if (firstLogin.isNotEmpty) {
       try {
-        final lastDate = DateFormat('yyyy-MM-dd').parse(lastSettlement);
         final today = DateTime.now();
-        final isDifferentDay = lastDate.year != today.year ||
-                               lastDate.month != today.month ||
-                               lastDate.day != today.day;
+
+        // Usar lastSettlement si existe, sino usar firstLogin
+        String dateToCompare = lastSettlement.isNotEmpty ? lastSettlement : firstLogin;
+        final compareDate = DateFormat('yyyy-MM-dd').parse(dateToCompare);
+
+        final isDifferentDay = compareDate.year != today.year ||
+                               compareDate.month != today.month ||
+                               compareDate.day != today.day;
 
         if (isDifferentDay) {
           // Mostrar alerta y detener navegación al checkout
@@ -472,7 +485,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 // Encontrar el índice real en la lista completa de productos
                                 final realIndex = products.indexWhere((p) => p.sId == product.sId);
                                 if (realIndex == -1) return;
-                                
+
                                 if (usesFlavours(product)) {
                                   if (product.quantity == 1) {
                                     // Eliminar directo si cantidad es 1
@@ -500,7 +513,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 // Encontrar el índice real en la lista completa de productos
                                 final realIndex = products.indexWhere((p) => p.sId == product.sId);
                                 if (realIndex == -1) return;
-                                
+
                                 if (usesFlavours(product)) {
                                   dialogFlavour(context, product, realIndex);
                                 } else if (product.extras != null && product.extras!.isNotEmpty) {
@@ -563,16 +576,16 @@ class _DashboardPageState extends State<DashboardPage> {
       ) {
     // Cerrar el teclado antes de mostrar el dialog
     FocusScope.of(context).unfocus();
-    
+
     Map<String, int> tempFlavourQuantities = {};
     int tempQuantity = prod.quantity == 0 ? 1 : prod.quantity; // Trabajar con copia temporal
-    
+
     // Inicializar cantidades
     if (prod.flavours != null) {
       for (var flavour in prod.flavours!) {
         tempFlavourQuantities[flavour.sId!] = 0;
       }
-      
+
       // Si hay selección previa, cargarla
       if (prod.additional != null && prod.additional!.isNotEmpty) {
         tempFlavourQuantities = parseFlavourString(prod.additional!, prod.flavours!);
@@ -590,7 +603,7 @@ class _DashboardPageState extends State<DashboardPage> {
               int totalSelected = tempFlavourQuantities.values.fold(0, (sum, qty) => sum + qty);
               int required = requiredFlavourQuantity(prod, tempQuantity);
               bool isValid = isFlavourSelectionValid(tempFlavourQuantities, required);
-              
+
               return Container(
                 width: MediaQuery.of(context).size.width * 0.99,
                 constraints: BoxConstraints(
@@ -656,7 +669,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         ],
                       ),
                     ),
-                    
+
                     // Lista de sabores
                     Expanded(
                       child: SingleChildScrollView(
@@ -690,10 +703,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                             CartButtonQuantity(
                                               color: Colors.red,
                                               icon: Icons.remove,
-                                              onTap: tempFlavourQuantities[flavour.sId!]! > 0 
+                                              onTap: tempFlavourQuantities[flavour.sId!]! > 0
                                                 ? () {
                                                     dialogSetState(() {
-                                                      tempFlavourQuantities[flavour.sId!] = 
+                                                      tempFlavourQuantities[flavour.sId!] =
                                                         tempFlavourQuantities[flavour.sId!]! - 1;
                                                     });
                                                   }
@@ -713,10 +726,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                             CartButtonQuantity(
                                               color: Colors.green,
                                               icon: Icons.add,
-                                              onTap: totalSelected < required 
+                                              onTap: totalSelected < required
                                                 ? () {
                                                     dialogSetState(() {
-                                                      tempFlavourQuantities[flavour.sId!] = 
+                                                      tempFlavourQuantities[flavour.sId!] =
                                                         tempFlavourQuantities[flavour.sId!]! + 1;
                                                     });
                                                   }
@@ -732,7 +745,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                       ),
                     ),
-                    
+
                     // Control de cantidad del producto
                     Container(
                       color: Colors.grey[700],
@@ -744,7 +757,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           CartButtonQuantity(
                             color: Colors.red,
                             icon: Icons.remove,
-                            onTap: tempQuantity > 1 
+                            onTap: tempQuantity > 1
                               ? () {
                                   dialogSetState(() {
                                     tempQuantity--;
@@ -778,7 +791,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         ],
                       ),
                     ),
-                    
+
                     // Botones de acción
                     Container(
                       width: double.infinity,
@@ -801,11 +814,11 @@ class _DashboardPageState extends State<DashboardPage> {
                               setState(() {
                                 // Generar string de sabores
                                 String flavourString = generateFlavourString(tempFlavourQuantities, prod.flavours!);
-                                
+
                                 // Actualizar producto
                                 prod.additional = flavourString;
                                 products[index].additional = flavourString;
-                                
+
                                 // Actualizar cantidad con valor temporal
                                 products[index].quantity = tempQuantity;
                                 quantities[products[index].sId!] = tempQuantity;
@@ -836,7 +849,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ) {
     // Cerrar el teclado antes de mostrar el dialog
     FocusScope.of(context).unfocus();
-    
+
     tempExtras.clear();
     if (prod.additional != null && prod.additional!.isNotEmpty) {
       List<String> selectedItems = prod.additional!.split(', ');

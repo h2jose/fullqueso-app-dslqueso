@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ubiiqueso/utils/constants.dart';
 import 'package:flutter/material.dart';
@@ -85,6 +86,11 @@ class _HomePageState extends State<HomePage> {
         SharedService.logon = 'YES';
         SharedService.operatorCode = operatorCode;
 
+        // Guardar fecha de primer login si es la primera vez
+        if (SharedService.firstLoginDate.isEmpty) {
+          SharedService.firstLoginDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        }
+
         // Navegar al dashboard
         Navigator.pushNamedAndRemoveUntil(
             context, '/dashboard', (route) => false);
@@ -140,7 +146,7 @@ class _HomePageState extends State<HomePage> {
                           //       color: Colors.blueAccent[700]),
                           // ),
                           TextSpan(
-                            text: 'BC',
+                            text: 'BCRECER',
                             style: TextStyle(
                                 fontSize: 24.0,
                                 fontWeight: FontWeight.w500,

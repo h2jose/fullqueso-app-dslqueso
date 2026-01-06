@@ -22,6 +22,7 @@ class SharedService {
   static bool _showImage = false;
   static String _counterId = '';
   static String _lastSettlementDate = '';
+  static String _firstLoginDate = '';
 
   static Future init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -44,6 +45,15 @@ class SharedService {
   static set lastSettlementDate(String lastSettlementDate) {
     _lastSettlementDate = lastSettlementDate;
     _prefs.setString('lastSettlementDate', lastSettlementDate);
+  }
+
+  // FIRST LOGIN DATE
+  static String get firstLoginDate {
+    return _prefs.getString('firstLoginDate') ?? _firstLoginDate;
+  }
+  static set firstLoginDate(String firstLoginDate) {
+    _firstLoginDate = firstLoginDate;
+    _prefs.setString('firstLoginDate', firstLoginDate);
   }
 
   // ZELLE
