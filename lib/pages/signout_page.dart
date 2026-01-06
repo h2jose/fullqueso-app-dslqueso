@@ -40,12 +40,14 @@ class _SignoutPageState extends State<SignoutPage> {
 
       // Parsear respuesta DSL
       if (result is SettlementResponse) {
+        // Guardar fecha del settlement exitoso ANTES del setState
+        if (result.result == 0) {
+          SharedService.lastSettlementDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        }
+
         setState(() {
           // result == 0 significa éxito en DSL
           if (result.result == 0) {
-            // Guardar fecha del settlement exitoso
-            SharedService.lastSettlementDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
             settlementResult = '''
 ✅ CIERRE EXITOSO
 
@@ -78,6 +80,133 @@ Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
         isProcessing = false;
         finished = false;
       });
+    }
+  }
+
+  void _showLogoutWithoutSettlementDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange, size: 30),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Cerrar Sesión sin Cierre de POS',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '⚠️ ADVERTENCIA',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+                fontSize: 16,
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Está a punto de cerrar sesión SIN realizar el cierre de lote del POS.',
+              style: TextStyle(fontSize: 15),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Use esta opción SOLO como medida de emergencia para cerrar sesión.',
+              style: TextStyle(
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext); // Cerrar dialog
+            },
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[700],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20.0,
+                vertical: 12.0,
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext); // Cerrar dialog
+              await _logoutWithoutSettlement();
+            },
+            child: const Text('Confirmar y Salir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _logoutWithoutSettlement() async {
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      // 1. Actualizar fecha de último cierre (bajo responsabilidad del supervisor)
+      SharedService.lastSettlementDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // 2. Recuperar counterId de SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final counterId = prefs.getString('counterId');
+
+      if (counterId != null && counterId.isNotEmpty) {
+        // 3. Cerrar sesión en el servidor
+        await closeCounterSession(counterId);
+        // 4. Limpiar counterId de SharedPreferences
+        await prefs.remove('counterId');
+      }
+
+      // 5. Limpiar datos locales
+      SharedService.shopId = '';
+      SharedService.shopCode = '';
+
+      // 6. Logout de Firebase
+      await FirebaseAuth.instance.signOut();
+
+      // 6. Navegar a HomePage
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error en logout sin settlement: $e');
+      if (mounted) {
+        ShowAlert(context, 'Error al cerrar sesión: ${e.toString()}', 'error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isProcessing = false;
+        });
+      }
     }
   }
 
@@ -122,6 +251,18 @@ Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
                 child: isProcessing
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('Cerrar Punto', textScaler: TextScaler.linear(1.5)),
+              ),
+              if (!finished) const SizedBox(height: 10),
+              if (!finished) TextButton(
+                onPressed: isProcessing ? null : _showLogoutWithoutSettlementDialog,
+                child: Text(
+                  'Salir de la App sin Cierre de POS',
+                  style: TextStyle(
+                    color: isProcessing ? Colors.grey : Colors.black54,
+                    fontSize: 14,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               if (settlementResult.isNotEmpty)
