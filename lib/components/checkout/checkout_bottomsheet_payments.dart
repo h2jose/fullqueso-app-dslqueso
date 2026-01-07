@@ -241,6 +241,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
 
           setState(() {loading = false;});
 
+          await _imprimirOrdenServicio();
           _processCheckout();
           return;
 
@@ -271,6 +272,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
         checkout.paidZelleVaucher = _zelleReferenciaController.text;
         checkout.paidZelle = checkout.totalToPay;
       });
+      await _imprimirOrdenServicio();
       _processCheckout();
       return;
 
@@ -328,7 +330,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
                   ),
                   minimumSize: const Size(double.infinity, 36), // Make button take full width available in dialog
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                   // print('Conciliacion no existe, se puede guardar para revisión');
 
                   setState(() {
@@ -350,6 +352,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
                   Navigator.of(dialogContext).pop();
                   // if (mounted) Navigator.of(context).pop(); // Keep this commented out or decide if it's needed based on flow
 
+                  await _imprimirOrdenServicio();
                   _processCheckout();
                   },
                   child: const Text(
