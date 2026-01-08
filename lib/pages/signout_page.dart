@@ -26,6 +26,7 @@ class _SignoutPageState extends State<SignoutPage> {
   bool isBack = true;
   bool finished = false;
   bool isProcessing = false;
+  bool noMovementsDetected = false;
   String settlementResult = '';
 
   // Método para procesar settlement con DSL
@@ -59,11 +60,25 @@ Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
             isBack = false;
             finished = true;
             isProcessing = false;
+          } else if (result.result == -1) {
+            // Cualquier error -1: No es necesario forzar cierre desde la app
+            settlementResult = '''
+ℹ️ NO ES NECESARIO CERRAR DESDE LA APP
+
+El cierre de lote no pudo completarse desde la aplicación.
+
+Puede salir y cerrar manualmente desde la app del Banco si lo necesita.
+''';
+            noMovementsDetected = true;
+            isProcessing = false;
+            finished = false;
           } else {
+            // Error real - permitir reintento
             settlementResult = 'ERROR: ${result.result} - ${result.responseMessage ?? 'Error desconocido'}';
             ShowAlert(context, "CIERRE RECHAZADO: $settlementResult", 'error');
             isProcessing = false;
             finished = false;
+            noMovementsDetected = false;
           }
         });
       } else {
@@ -239,7 +254,7 @@ Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
           child: Column(
             children: [
               const SizedBox(height: 20),
-              if (!finished) ElevatedButton(
+              if (!finished && !noMovementsDetected) ElevatedButton(
                 onPressed: isProcessing ? null : _procesarSettlementDSL,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColor.primary, // Background color
@@ -252,8 +267,8 @@ Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('Cerrar Punto', textScaler: TextScaler.linear(1.5)),
               ),
-              if (!finished) const SizedBox(height: 10),
-              if (!finished) TextButton(
+              if (!finished && !noMovementsDetected) const SizedBox(height: 10),
+              if (!finished && !noMovementsDetected) TextButton(
                 onPressed: isProcessing ? null : _showLogoutWithoutSettlementDialog,
                 child: Text(
                   'Salir de la App sin Cierre de POS',
@@ -263,6 +278,17 @@ Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
                     decoration: TextDecoration.underline,
                   ),
                 ),
+              ),
+              if (noMovementsDetected) ElevatedButton(
+                onPressed: _showLogoutWithoutSettlementDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColor.dark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text('Salir sin Cierre de POS', textScaler: TextScaler.linear(1.5)),
               ),
               const SizedBox(height: 20),
               if (settlementResult.isNotEmpty)
