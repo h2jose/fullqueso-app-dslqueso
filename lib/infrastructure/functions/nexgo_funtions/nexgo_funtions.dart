@@ -9,10 +9,8 @@ class DoTransaction {
 
   Future<void> bindService() async {
     try {
-      final bool result = await platform.invokeMethod('bindService');
-      print('Service bound: $result');
-    } on PlatformException catch (e) {
-      print("Error binding service: ${e.message}");
+      await platform.invokeMethod('bindService');
+    } on PlatformException catch (_) {
     }
   }
 
@@ -24,8 +22,6 @@ class DoTransaction {
     int transType,
   ) async {
     try {
-      print('VALIDANDO MONTO DESDE DoTransaction: $amount');
-      print('VALIDANDO CEDULA DESDE DoTransaction: $cardholderId');
       final String result = await platform.invokeMethod('doTransaction', {
         'amount': amount,
         'cardholderId': cardholderId,
@@ -34,14 +30,10 @@ class DoTransaction {
         'transType': transType,
       });
 
-      print('RESPUESTA NATIVA: $result');
       final Map<String, dynamic> resultJson = jsonDecode(result);
-      print('JSON PARSEADO: $resultJson');
       RecordResponse records = RecordResponse.fromJson(resultJson);
-      print('RECORD CREADO: result=${records.result}');
       return records;
     } on PlatformException catch (e) {
-      print('ERROR PLATFORM: ${e.code} - ${e.message}');
 
       // Si el error es SERVICE_NOT_BOUND, lanzar excepción directamente
       if (e.code == 'SERVICE_NOT_BOUND' || e.code == 'REMOTE_EXCEPTION') {
@@ -51,12 +43,9 @@ class DoTransaction {
       // Si es TRANSACTION_FAILED, el mensaje ya es JSON
       try {
         final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
-        print('ERROR JSON PARSEADO: $resultJson2');
         RecordResponse records2 = RecordResponse.fromJson(resultJson2);
-        print('ERROR CONVERTIDO A RECORD: result=${records2.result}');
         return records2;
       } catch (parseError) {
-        print('ERROR PARSEANDO JSON: $parseError');
         throw Exception('Error procesando respuesta: ${e.message}');
       }
     }
@@ -71,19 +60,12 @@ class DoTransaction {
         'referenceNo': '',
         'transType': 4,
       });
-      print(result);
       final Map<String, dynamic> resultJson = jsonDecode(result);
-      print(resultJson);
       SettlementResponse records = SettlementResponse.fromJson(resultJson);
-      print(records);
       return records;
     } on PlatformException catch (e) {
-      print(e.message);
       final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
-      print(resultJson2);
       SettlementResponse records2 = SettlementResponse.fromJson(resultJson2);
-      print(records2);
-      print("lo volvi un record");
       return records2;
     }
   }
@@ -108,7 +90,7 @@ class PrinterPos {
     String trace,
   ) async {
     try {
-      final String result = await platform.invokeMethod('printReceipt', {
+      await platform.invokeMethod('printReceipt', {
         'fullName': fullName,
         'amount': amount,
         'ciClient': ciClient,
@@ -122,22 +104,18 @@ class PrinterPos {
         'serial': serial,
         'trace': trace,
       });
-      print('Result from Java: $result');
-    } on PlatformException catch (e) {
-      print("Error: ${e.message}");
+    } on PlatformException catch (_) {
     }
   }
 
   //Función de test para imprimir sin parámetros
   Future<void> imprimirTestPos(String fecha, String hora) async {
     try {
-      final String result = await PrinterPos.platform.invokeMethod(
+      await PrinterPos.platform.invokeMethod(
         'printerTest',
         {'fecha': fecha, 'hora': hora},
       );
-      print(result);
-    } catch (e) {
-      print(e);
+    } catch (_) {
     }
   }
 
@@ -150,16 +128,14 @@ class PrinterPos {
     String operador,
   ) async {
     try {
-      final String result = await platform.invokeMethod('printOrdenServicio', {
+      await platform.invokeMethod('printOrdenServicio', {
         'ticket': ticket,
         'cedula': cedula,
         'cliente': cliente,
         'fechaHora': fechaHora,
         'operador': operador,
       });
-      print('Orden de servicio impresa: $result');
-    } on PlatformException catch (e) {
-      print("Error imprimiendo orden: ${e.message}");
+    } on PlatformException catch (_) {
     }
   }
 }
