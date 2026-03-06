@@ -4,6 +4,18 @@ RecordResponse recordResponseFromJson(String str) => RecordResponse.fromJson(jso
 
 String recordResponseToJson(RecordResponse data) => json.encode(data.toJson());
 
+/// Parsea un entero desde el JSON tolerando claves alternativas y tipos (int, double, String).
+int _parseIntFromJson(Map<String, dynamic> json, List<String> keys, int defaultValue) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value == null) continue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? defaultValue;
+  }
+  return defaultValue;
+}
+
 class RecordResponse {
     String? rrn;
     int accountType;
@@ -50,12 +62,12 @@ class RecordResponse {
         batchNum: json["batchNum"] ?? "",
         date: json["date"] ?? "",
         deviceSerial: json["deviceSerial"] ?? "",
-        errorCode: json["errorCode"] ?? 0,
+        errorCode: _parseIntFromJson(json, ["errorCode", "ErrorCode"], 0),
         merchantId: json["merchantID"] ?? "",
         referenceNumber: json["referenceNumber"] ?? "",
         responseCode: json["responseCode"] ?? "",
         responseMessage: json["responseMessage"] ?? "",
-        result: json["result"] ?? -1,
+        result: _parseIntFromJson(json, ["result", "Result"], -1),
         terminalId: json["terminalID"] ?? "",
         time: json["time"] ?? "",
         tipAmount: json["tipAmount"] ?? "",

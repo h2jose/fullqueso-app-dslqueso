@@ -1,6 +1,5 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/services.dart';
 import 'package:ubiiqueso/components/checkout/checkout.dart';
 import 'package:ubiiqueso/components/common/app_bar_checkout_widget.dart';
 import 'package:ubiiqueso/components/common/show_alert.dart';
@@ -17,6 +16,7 @@ import 'package:intl/intl.dart';
 import 'package:ubiiqueso/infrastructure/functions/nexgo_funtions/nexgo_funtions.dart';
 import 'package:ubiiqueso/infrastructure/functions/help_funtions/help_funtions.dart';
 import 'package:ubiiqueso/infrastructure/models/record_response_model.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class CheckoutPage extends StatefulWidget {
   final List<ProductModel> products;
@@ -248,6 +248,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ? widget.ticketNumber.substring(widget.ticketNumber.length - 6)
         : widget.ticketNumber;
 
+    // =========================================================
+    // FASE 1: Solo interactuar con el SDK — capturar resultado
+    // sin procesar nada de Flutter durante esta fase
+    // =========================================================
+    RecordResponse? sdkResult;
+    bool sdkSuccess = false;
+    String? sdkError;
+
     try {
       checkout.statusId = 0;
       checkout.statusCurrent = 'Solicitado';
@@ -256,97 +264,99 @@ class _CheckoutPageState extends State<CheckoutPage> {
       checkout.paidPuntoBs = 0;
       checkout.paidPuntoUsd = 0;
 
-      await _processCheckout(false); // Guardar sin finalizar (Pedido sin pago)
+      await _processCheckout(false);
 
       String cardholderId = checkout.customerId ?? '111111';
 
-      // Llamar a DSL doTransaction (transType: 1 = PAYMENT)
       final result = await _dslService.doTransaction(
         amount,
         cardholderId,
         '1',
         numOrder,
-        1, // transType: 1 = PAYMENT
+        1,
       );
 
-      // Parsear respuesta DSL
       if (result is RecordResponse) {
-        setState(() {
-          // result == 0 significa éxito en DSL
-          if (result.result == 0) {
-            checkout.statusId = 2;
-            checkout.statusCurrent = 'Preparación';
-            checkout.totalPaid = totalPaid;
-            checkout.totalPaidBs = totalPaidBs;
-            checkout.paidPuntoBs = paidPuntoBs;
-            checkout.paidPuntoUsd = paidPuntoUsd;
-            checkout.terminal = result.terminalId;
-            checkout.isUbii = false;
-            checkout.ubiiLog = '${result.rrn ?? ''} | ${result.referenceNumber ?? ''}';
-
-            // IMPRIMIR COMPROBANTE
-            _imprimirComprobante(result);
-
-            _processCheckout(true); // Guardar y finalizar
-          } else {
-            // Pago rechazado - imprimir comprobante de error
-            _imprimirComprobanteError(result);
-
-            ShowAlert(context, "Error procesando pago - Código: ${result.errorCode}", 'error');
-            setState(() {
-              saving = false;
-            });
-            return;
-          }
-        });
+        sdkResult = result;
+        final resultOk = result.result == 0;
+        final fallbackOk = result.errorCode == 0 &&
+            result.referenceNumber.isNotEmpty;
+        sdkSuccess = resultOk || fallbackOk;
       } else {
-        ShowAlert(context, "Error: Respuesta inválida del POS", 'error');
-        setState(() {
-          saving = false;
-        });
+        sdkError = "Respuesta inválida del POS";
       }
     } catch (e) {
-      // Intentar extraer información del error para imprimir comprobante
-      RecordResponse? errorResponse;
-      String errorMessage = "Error procesando pago";
+      sdkError = e.toString();
+    }
 
-      try {
-        // Intentar parsear el JSON del error
-        final errorString = e.toString();
+    // =========================================================
+    // FASE 2: Delay para que el SDK complete su ciclo interno
+    // =========================================================
+    await Future.delayed(const Duration(milliseconds: 300));
 
-        // Extraer JSON del mensaje de error
-        final jsonStart = errorString.indexOf('{');
-        final jsonEnd = errorString.lastIndexOf('}');
+    // =========================================================
+    // FASE 3: Procesar en contexto limpio de Flutter
+    // =========================================================
+    scheduleMicrotask(() async {
+      await _procesarResultadoSDK(sdkResult, sdkSuccess, sdkError);
+    });
+  }
 
-        if (jsonStart != -1 && jsonEnd != -1) {
-          final jsonString = errorString.substring(jsonStart, jsonEnd + 1);
-          final errorJson = jsonDecode(jsonString);
+  Future<void> _procesarResultadoSDK(
+    RecordResponse? sdkResult,
+    bool sdkSuccess,
+    String? sdkError,
+  ) async {
+    if (!mounted) return;
 
-          // Crear RecordResponse del error
-          errorResponse = RecordResponse.fromJson(errorJson);
+    // Error del SDK (excepción o respuesta inválida)
+    if (sdkError != null || sdkResult == null) {
+      ShowAlert(context, sdkError ?? "Error desconocido del POS", 'error');
+      if (mounted) setState(() => saving = false);
+      return;
+    }
 
-          // Extraer errorCode para mensaje
-          final errorCode = errorJson['errorCode'] ?? errorJson['result'] ?? 'desconocido';
-          errorMessage = "Error procesando pago - Código: $errorCode";
-        } else {
-          errorMessage = "Error procesando pago";
-        }
-      } catch (parseError) {
-        errorMessage = "Error procesando pago";
+    // Log para diagnóstico en Crashlytics (sin crash)
+    FirebaseCrashlytics.instance.log(
+      'DSL_RESULT: result=${sdkResult.result} errorCode=${sdkResult.errorCode} '
+      'sdkSuccess=$sdkSuccess refLen=${sdkResult.referenceNumber.length}',
+    );
+
+    // Pago rechazado por el terminal (solo si errorCode indica error real)
+    // Si errorCode == 0 el terminal no reporta error; tratar como éxito para evitar
+    // falso "Error - Código: 0" cuando el cobro sí se realizó (release vs debug).
+    final treatAsSuccess = sdkSuccess || sdkResult.errorCode == 0;
+
+    if (!treatAsSuccess) {
+      _imprimirComprobanteError(sdkResult);
+      if (mounted) {
+        ShowAlert(context, "Error procesando pago - Código: ${sdkResult.errorCode}", 'error');
+        setState(() => saving = false);
       }
+      return;
+    }
 
-      // Mostrar alerta con mensaje limpio
-      ShowAlert(context, errorMessage, 'error');
-
-      // IMPRIMIR COMPROBANTE DE ERROR si se pudo parsear
-      if (errorResponse != null) {
-        _imprimirComprobanteError(errorResponse);
-      }
-
+    // =========================================================
+    // PAGO EXITOSO
+    // =========================================================
+    if (mounted) {
       setState(() {
-        saving = false;
+        checkout.statusId = 2;
+        checkout.statusCurrent = 'Preparación';
+        checkout.totalPaid = getTotalAmount();
+        checkout.totalPaidBs = getTotalAmountBs();
+        checkout.paidPuntoBs = getTotalAmountBs();
+        checkout.paidPuntoUsd = getTotalAmount();
+        checkout.terminal = sdkResult.terminalId ?? 'DSL';
+        checkout.isUbii = false;
+        checkout.ubiiLog = '${sdkResult.rrn ?? ''} | ${sdkResult.referenceNumber ?? ''}';
       });
     }
+
+    _imprimirComprobante(sdkResult);
+
+    if (!mounted) return;
+    await _processCheckout(true);
   }
 
   void _imprimirComprobante(RecordResponse response) async {

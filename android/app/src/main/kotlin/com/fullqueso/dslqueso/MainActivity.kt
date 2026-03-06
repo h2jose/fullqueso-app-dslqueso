@@ -8,7 +8,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.RemoteException
 import android.util.Log
 import com.google.gson.Gson
@@ -171,21 +173,53 @@ class MainActivity : FlutterActivity() {
         Log.d("DSL_DEBUG", "Request created - Calling transactionRequest...")
 
         try {
+            // El SDK DSL puede enviar el callback dos veces; en release a veces llega primero
+            // uno con result!=0 (ej. cancelado) y luego el de result=0 (éxito). Diferimos el envío
+            // del error para dar prioridad al callback de éxito si llega poco después.
+            var resultSent = false
+            val handler = Handler(Looper.getMainLooper())
+            var pendingErrorRunnable: Runnable? = null
+
             smartService!!.transactionRequest(req, object : ITransactionResultListener.Stub() {
                 override fun onTransactionResult(trx: TransactionResultEntity?) {
                     Log.d("DSL_DEBUG", "=== RESPUESTA RECIBIDA ===")
                     Log.d("DSL_DEBUG", "Result: ${trx?.result}")
                     Log.d("DSL_DEBUG", "Response: ${trx?.responseMessage}")
 
+                    if (resultSent) {
+                        Log.w("DSL_DEBUG", "IGNORANDO callback duplicado - resultado ya enviado")
+                        return
+                    }
+
                     val gson = Gson()
                     val json = gson.toJson(trx)
-
                     Log.d("DSL_DEBUG", "JSON: $json")
 
-                    if (trx?.result == 0) {
-                        result.success(json)
-                    } else {
-                        result.error("TRANSACTION_FAILED", json, null)
+                    runOnUiThread {
+                        try {
+                            if (trx?.result == 0) {
+                                pendingErrorRunnable?.let { handler.removeCallbacks(it) }
+                                pendingErrorRunnable = null
+                                resultSent = true
+                                result.success(json)
+                                Log.d("DSL_DEBUG", "result.success() enviado")
+                            } else {
+                                // No enviar error de inmediato: esperar un poco por si llega éxito después (release)
+                                val errorJson = json
+                                val runnable = Runnable {
+                                    if (!resultSent) {
+                                        resultSent = true
+                                        result.error("TRANSACTION_FAILED", errorJson, null)
+                                        Log.d("DSL_DEBUG", "result.error() enviado (tras espera)")
+                                    }
+                                }
+                                pendingErrorRunnable = runnable
+                                handler.postDelayed(runnable, 2000)
+                                Log.d("DSL_DEBUG", "result!=0: esperando 2s por posible callback de éxito")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("DSL_ERROR", "Error enviando resultado: ${e.message}")
+                        }
                     }
                 }
             })
