@@ -316,16 +316,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    // Log para diagnóstico en Crashlytics (sin crash)
+    // Datos que el POS devuelve solo cuando el pago es aprobado (referencia, terminal, RRN)
+    final hasRef = sdkResult.referenceNumber.isNotEmpty;
+    final hasTerminal = sdkResult.terminalId.isNotEmpty;
+    final hasRrn = (sdkResult.rrn?.isNotEmpty ?? false);
+    final hasTransactionProof = hasRef && (hasTerminal || hasRrn);
+
     FirebaseCrashlytics.instance.log(
       'DSL_RESULT: result=${sdkResult.result} errorCode=${sdkResult.errorCode} '
-      'sdkSuccess=$sdkSuccess refLen=${sdkResult.referenceNumber.length}',
+      'sdkSuccess=$sdkSuccess ref=$hasRef term=$hasTerminal rrn=$hasRrn',
     );
 
-    // Pago rechazado por el terminal (solo si errorCode indica error real)
-    // Si errorCode == 0 el terminal no reporta error; tratar como éxito para evitar
-    // falso "Error - Código: 0" cuando el cobro sí se realizó (release vs debug).
-    final treatAsSuccess = sdkSuccess || sdkResult.errorCode == 0;
+    // Éxito: sdkSuccess (result==0) O bien errorCode==0 con datos de transacción.
+    // Rechazos suelen tener errorCode==0 pero sin referencia/terminal; no tratarlos como éxito.
+    final treatAsSuccess = sdkSuccess ||
+        (sdkResult.errorCode == 0 && hasTransactionProof);
 
     if (!treatAsSuccess) {
       _imprimirComprobanteError(sdkResult);
