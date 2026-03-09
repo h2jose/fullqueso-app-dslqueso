@@ -18,6 +18,20 @@ import 'package:ubiiqueso/infrastructure/functions/help_funtions/help_funtions.d
 import 'package:ubiiqueso/infrastructure/models/record_response_model.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
+/// Indica si el mensaje/código del SDK corresponde a un rechazo (no usar errorCode==0 como éxito).
+bool _isRejectionResponse(String message, String code) {
+  final m = message.toLowerCase();
+  final c = code.toLowerCase();
+  const rejectionHints = [
+    'rechaz', 'denied', 'declined', 'cancelado', 'cancel ', 'fallido',
+    'fail', 'reject', 'invalid', 'insufficient', 'insuficiente',
+  ];
+  for (final hint in rejectionHints) {
+    if (m.contains(hint) || c.contains(hint)) return true;
+  }
+  return false;
+}
+
 class CheckoutPage extends StatefulWidget {
   final List<ProductModel> products;
   final Map<String, int> quantities;
@@ -254,6 +268,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     // =========================================================
     RecordResponse? sdkResult;
     bool sdkSuccess = false;
+    bool? approvedByChannel;
     String? sdkError;
 
     try {
@@ -276,15 +291,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         1,
       );
 
-      if (result is RecordResponse) {
-        sdkResult = result;
-        final resultOk = result.result == 0;
-        final fallbackOk = result.errorCode == 0 &&
-            result.referenceNumber.isNotEmpty;
-        sdkSuccess = resultOk || fallbackOk;
-      } else {
-        sdkError = "Respuesta inválida del POS";
-      }
+      sdkResult = result.response;
+      approvedByChannel = result.approvedByChannel;
+      final r = result.response;
+      final resultOk = r.result == 0;
+      final fallbackOk = r.errorCode == 0 && r.referenceNumber.isNotEmpty;
+      sdkSuccess = resultOk || fallbackOk;
     } catch (e) {
       sdkError = e.toString();
     }
@@ -298,7 +310,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     // FASE 3: Procesar en contexto limpio de Flutter
     // =========================================================
     scheduleMicrotask(() async {
-      await _procesarResultadoSDK(sdkResult, sdkSuccess, sdkError);
+      await _procesarResultadoSDK(sdkResult, sdkSuccess, sdkError, approvedByChannel);
     });
   }
 
@@ -306,6 +318,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     RecordResponse? sdkResult,
     bool sdkSuccess,
     String? sdkError,
+    bool? approvedByChannel,
   ) async {
     if (!mounted) return;
 
@@ -316,21 +329,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    // Datos que el POS devuelve solo cuando el pago es aprobado (referencia, terminal, RRN)
-    final hasRef = sdkResult.referenceNumber.isNotEmpty;
-    final hasTerminal = sdkResult.terminalId.isNotEmpty;
-    final hasRrn = (sdkResult.rrn?.isNotEmpty ?? false);
-    final hasTransactionProof = hasRef && (hasTerminal || hasRrn);
+    // Rechazo por mensaje/código (rechazado, denied, cancelado, etc.)
+    final isRejectionByMessage = _isRejectionResponse(
+      sdkResult.responseMessage,
+      sdkResult.responseCode,
+    );
+    // Rechazo por result explícito: SDK en rechazos suele devolver result=1,2,...; en éxito 0 o -1 (no parseado en release).
+    final isRejectionByResult = sdkResult.result > 0;
 
-    FirebaseCrashlytics.instance.log(
-      'DSL_RESULT: result=${sdkResult.result} errorCode=${sdkResult.errorCode} '
-      'sdkSuccess=$sdkSuccess ref=$hasRef term=$hasTerminal rrn=$hasRrn',
+    final dslLog = 'approvedByChannel=$approvedByChannel result=${sdkResult.result} errorCode=${sdkResult.errorCode} '
+        'sdkSuccess=$sdkSuccess msg="${sdkResult.responseMessage}" code="${sdkResult.responseCode}"';
+    FirebaseCrashlytics.instance.log('DSL_RESULT: $dslLog');
+    // Reporte no fatal para ver en Crashlytics los valores reales del SDK (éxito y rechazo), sin crash.
+    FirebaseCrashlytics.instance.recordError(
+      Exception('DSL_PAYMENT_RESULT'),
+      StackTrace.current,
+      reason: dslLog,
+      fatal: false,
     );
 
-    // Éxito: sdkSuccess (result==0) O bien errorCode==0 con datos de transacción.
-    // Rechazos suelen tener errorCode==0 pero sin referencia/terminal; no tratarlos como éxito.
-    final treatAsSuccess = sdkSuccess ||
-        (sdkResult.errorCode == 0 && hasTransactionProof);
+    // Regla fija: si Android envió por result.error() (approvedByChannel==false), es rechazo/cancelado.
+    // Solo consideramos éxito si el canal envió result.success() (approvedByChannel==true).
+    // Así evitamos que rechazos (mismo result/errorCode que éxito) se traten como éxito.
+    final allowedByData = sdkSuccess ||
+        (sdkResult.errorCode == 0 && (sdkResult.result == 0 || sdkResult.result == -1));
+    final treatAsSuccess = approvedByChannel == true &&
+        allowedByData &&
+        !isRejectionByMessage &&
+        !isRejectionByResult;
 
     if (!treatAsSuccess) {
       _imprimirComprobanteError(sdkResult);

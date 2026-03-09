@@ -4,6 +4,14 @@ import 'package:ubiiqueso/infrastructure/models/record_response_model.dart';
 import 'package:ubiiqueso/infrastructure/models/settlement_response_sdk_model.dart';
 import 'package:flutter/services.dart';
 
+/// Resultado de doTransaction: respuesta del SDK y si Android la envió por success (true) o error (false).
+class DslTransactionResult {
+  final RecordResponse response;
+  final bool approvedByChannel;
+
+  DslTransactionResult({required this.response, required this.approvedByChannel});
+}
+
 class DoTransaction {
   static const platform = MethodChannel('nexgo_service');
 
@@ -14,7 +22,9 @@ class DoTransaction {
     }
   }
 
-  Future<Object> doTransaction(
+  /// Devuelve [DslTransactionResult]. approvedByChannel=true si Android llamó result.success();
+  /// false si llamó result.error (rechazo/cancelado).
+  Future<DslTransactionResult> doTransaction(
     String amount,
     String cardholderId,
     String waiterNum,
@@ -32,7 +42,7 @@ class DoTransaction {
 
       final Map<String, dynamic> resultJson = jsonDecode(result);
       RecordResponse records = RecordResponse.fromJson(resultJson);
-      return records;
+      return DslTransactionResult(response: records, approvedByChannel: true);
     } on PlatformException catch (e) {
 
       // Si el error es SERVICE_NOT_BOUND, lanzar excepción directamente
@@ -40,11 +50,11 @@ class DoTransaction {
         throw Exception(e.message);
       }
 
-      // Si es TRANSACTION_FAILED, el mensaje ya es JSON
+      // Si es TRANSACTION_FAILED, el mensaje ya es JSON (rechazo/cancelado desde Android)
       try {
         final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
         RecordResponse records2 = RecordResponse.fromJson(resultJson2);
-        return records2;
+        return DslTransactionResult(response: records2, approvedByChannel: false);
       } catch (parseError) {
         throw Exception('Error procesando respuesta: ${e.message}');
       }

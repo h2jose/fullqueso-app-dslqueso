@@ -1,0 +1,132 @@
+import 'dart:convert';
+
+import 'package:disglobal_sdk_demo_for_flutter/infrastructure/models/record_response_model.dart';
+import 'package:disglobal_sdk_demo_for_flutter/infrastructure/models/settlement_response_sdk_model.dart';
+import 'package:flutter/services.dart';
+
+class DoTransaction {
+  static const platform = MethodChannel('nexgo_service');
+
+  Future<void> bindService() async {
+    try {
+      final bool result = await platform.invokeMethod('bindService');
+      print('Service bound: $result');
+    } on PlatformException catch (e) {
+      print("Error binding service: ${e.message}");
+    }
+  }
+
+  Future<Object> doTransaction(
+    String amount,
+    String cardholderId,
+    String waiterNum,
+    String referenceNo,
+    int transType,
+  ) async {
+    try {
+      print('VALIDANDO MONTO DESDE DoTransaction: $amount');
+      print('VALIDANDO CEDULA DESDE DoTransaction: $cardholderId');
+      final String result = await platform.invokeMethod('doTransaction', {
+        'amount': amount,
+        'cardholderId': cardholderId,
+        'waiterNum': waiterNum,
+        'referenceNo': referenceNo,
+        'transType': transType,
+      });
+
+      print(result);
+      final Map<String, dynamic> resultJson = jsonDecode(result);
+      print(resultJson);
+      RecordResponse records = RecordResponse.fromJson(resultJson);
+      print(records);
+      return records;
+    } on PlatformException catch (e) {
+      print(e.message);
+      final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
+      print(resultJson2);
+      RecordResponse records2 = RecordResponse.fromJson(resultJson2);
+      print(records2);
+      print("lo volvi un record");
+      return records2;
+    }
+  }
+
+  Future<Object> doTransactionSettlement() async {
+    try {
+      final String result = await platform.invokeMethod('doTransaction', {
+        'amount': '0',
+        'cardholderId': '0',
+        'waiterNum': '',
+        'referenceNo': '',
+        'transType': 4,
+      });
+      print(result);
+      final Map<String, dynamic> resultJson = jsonDecode(result);
+      print(resultJson);
+      SettlementResponse records = SettlementResponse.fromJson(resultJson);
+      print(records);
+      return records;
+    } on PlatformException catch (e) {
+      print(e.message);
+      final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
+      print(resultJson2);
+      SettlementResponse records2 = SettlementResponse.fromJson(resultJson2);
+      print(records2);
+      print("lo volvi un record");
+      return records2;
+    }
+  }
+}
+
+class PrinterPos {
+  static const platform = MethodChannel('nexgo_service');
+
+  //Imprimir comprobante real
+  Future<void> imprimirPos(
+    String fullName,
+    String ciClient,
+    String amount,
+    String ctaContrato,
+    String referenceNo,
+    String fecha,
+    String hora,
+    String lote,
+    String afiliado,
+    String terminal,
+    String serial,
+    String trace,
+  ) async {
+    try {
+      final String result = await platform.invokeMethod('printReceipt', {
+        'fullName': fullName,
+        'amount': amount,
+        'ciClient': ciClient,
+        'ctaContrato': ctaContrato,
+        'referenceNo': referenceNo,
+        'fecha': fecha,
+        'hora': hora,
+        'lote': lote,
+        'afiliado': afiliado,
+        'terminal': terminal,
+        'serial': serial,
+        'trace': trace,
+      });
+      print('Result from Java: $result');
+    } on PlatformException catch (e) {
+      print("Error: ${e.message}");
+    }
+  }
+
+  //Función de test para imprimir sin parámetros
+  Future<void> imprimirTestPos(String fecha, String hora) async {
+    try {
+      final String result = await PrinterPos.platform.invokeMethod(
+        'printerTest',
+        {'fecha': fecha, 'hora': hora},
+      );
+      print(result);
+    } catch (e) {
+      print(e);
+    }
+  }
+}

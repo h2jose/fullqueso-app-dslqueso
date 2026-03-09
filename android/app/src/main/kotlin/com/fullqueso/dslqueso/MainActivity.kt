@@ -214,8 +214,8 @@ class MainActivity : FlutterActivity() {
                                     }
                                 }
                                 pendingErrorRunnable = runnable
-                                handler.postDelayed(runnable, 2000)
-                                Log.d("DSL_DEBUG", "result!=0: esperando 2s por posible callback de éxito")
+                                handler.postDelayed(runnable, 5000)
+                                Log.d("DSL_DEBUG", "result!=0: esperando 5s por posible callback de éxito")
                             }
                         } catch (e: Exception) {
                             Log.e("DSL_ERROR", "Error enviando resultado: ${e.message}")
