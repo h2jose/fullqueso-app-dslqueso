@@ -62,6 +62,10 @@ class MainActivity : FlutterActivity() {
                         )
                     }
 
+                    "doSettlement" -> {
+                        doSettlement(result)
+                    }
+
                     "printReceipt" -> {
                         printReceipt(
                             fullName = call.argument<String>("fullName"),
@@ -136,7 +140,7 @@ class MainActivity : FlutterActivity() {
     }
 
     // =====================================================================
-    //  HACER TRANSACCIÓN
+    //  HACER TRANSACCIÓN (VENTAS / PAGOS)
     // =====================================================================
     private fun doTransaction(
         amount: String?,
@@ -226,6 +230,99 @@ class MainActivity : FlutterActivity() {
             Log.d("DSL_DEBUG", "transactionRequest called - waiting for response...")
         } catch (e: Exception) {
             Log.e("DSL_ERROR", "Exception in transactionRequest: ${e.message}")
+            e.printStackTrace()
+            result.error("REMOTE_EXCEPTION", e.message, null)
+        }
+    }
+
+    // =====================================================================
+    //  HACER CIERRE DE LOTE (SETTLEMENT)
+    // =====================================================================
+    private fun doSettlement(
+        result: MethodChannel.Result
+    ) {
+        Log.d("DSL_DEBUG", "=== INICIANDO doSettlement ===")
+
+        if (smartService == null) {
+            Log.e("DSL_ERROR", "smartService is NULL - Service not bound (settlement)!")
+            result.error(
+                "SERVICE_NOT_BOUND",
+                "El servicio DSL no está conectado. Reinicie la aplicación.",
+                null
+            )
+            return
+        }
+
+        Log.d("DSL_DEBUG", "smartService OK - Creating settlement request...")
+
+        val req = TransactionRequestEntity().apply {
+            this.amount = "0"
+            this.cardHolderId = "0"
+            this.waiterNumber = ""
+            this.referenceNumber = ""
+            this.transacitonType = 4 // 4 = SETTLEMENT según SDK
+        }
+
+        try {
+            smartService!!.transactionRequest(req, object : ITransactionResultListener.Stub() {
+                override fun onTransactionResult(trx: TransactionResultEntity?) {
+                    Log.d("DSL_DEBUG", "=== RESPUESTA SETTLEMENT RECIBIDA ===")
+                    Log.d("DSL_DEBUG", "Result: ${trx?.result}")
+                    Log.d("DSL_DEBUG", "ResponseCode: ${trx?.responseCode}")
+                    Log.d("DSL_DEBUG", "ErrorCode: ${trx?.errorCode}")
+                    Log.d("DSL_DEBUG", "ResponseMessage: ${trx?.responseMessage}")
+
+                    val gson = Gson()
+                    val json = gson.toJson(trx)
+                    Log.d("DSL_DEBUG", "JSON SETTLEMENT: $json")
+
+                    val sdkResult = trx?.result
+                    val errorCode = trx?.errorCode
+                    val message = trx?.responseMessage?.lowercase() ?: ""
+
+                    // ¿Hay totales o lotes? → indica que el POS sí hizo un cierre real
+                    val hasTotalsOrBatches =
+                        !trx?.totalDebitCardSale.isNullOrBlank() ||
+                                !trx?.totalCreditCardSale.isNullOrBlank() ||
+                                !trx?.debitBatchNo.isNullOrBlank() ||
+                                !trx?.creditBatchNo.isNullOrBlank()
+
+                    // “Sin movimientos” (no hay nada que cerrar)
+                    val isNoMovements =
+                        (sdkResult == -1) ||
+                                message.contains("sin movimiento") ||
+                                message.contains("sin movimientos") ||
+                                message.contains("no hay movimientos") ||
+                                message.contains("no transactions") ||
+                                message.contains("no transaction")
+
+                    // ÉXITO de cierre:
+                    // - result == 0 (éxito clásico del SDK)
+                    // - o bien errorCode == 0 y el POS devuelve totales/lotes (se imprimió resumen)
+                    val isSuccess =
+                        (sdkResult == 0) ||
+                                (errorCode == 0 && hasTotalsOrBatches)
+
+                    runOnUiThread {
+                        try {
+                            if (isSuccess || isNoMovements) {
+                                // Consideramos el cierre correcto (con o sin movimientos)
+                                result.success(json)
+                                Log.d("DSL_DEBUG", "result.success() enviado para settlement")
+                            } else {
+                                // Error real de cierre
+                                result.error("SETTLEMENT_FAILED", json, null)
+                                Log.d("DSL_DEBUG", "result.error() enviado para settlement")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("DSL_ERROR", "Error enviando resultado de settlement: ${e.message}")
+                        }
+                    }
+                }
+            })
+            Log.d("DSL_DEBUG", "transactionRequest (settlement) called - waiting for response...")
+        } catch (e: Exception) {
+            Log.e("DSL_ERROR", "Exception in transactionRequest (settlement): ${e.message}")
             e.printStackTrace()
             result.error("REMOTE_EXCEPTION", e.message, null)
         }

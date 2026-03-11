@@ -41,41 +41,83 @@ class _SignoutPageState extends State<SignoutPage> {
 
       // Parsear respuesta DSL
       if (result is SettlementResponse) {
-        // Guardar fecha del settlement exitoso ANTES del setState
-        if (result.result == 0) {
-          SharedService.lastSettlementDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        final int? sdkResult = result.result;
+        final int? errorCode = result.errorCode;
+        final String message = (result.responseMessage ?? '').toLowerCase();
+
+        final bool hasTotalsOrBatches =
+            (result.totalDebitCardSale != null && result.totalDebitCardSale!.isNotEmpty) ||
+                (result.totalCreditCardSale != null && result.totalCreditCardSale!.isNotEmpty) ||
+                (result.debitBatchNo != null && result.debitBatchNo!.isNotEmpty) ||
+                (result.creditBatchNo != null && result.creditBatchNo!.isNotEmpty);
+
+        final bool isNoMovements = (sdkResult == -1) ||
+            message.contains('sin movimiento') ||
+            message.contains('sin movimientos') ||
+            message.contains('no hay movimientos') ||
+            message.contains('no transactions') ||
+            message.contains('no transaction');
+
+        final bool isSuccess = (sdkResult == 0) ||
+            (errorCode == 0 && hasTotalsOrBatches);
+
+        // Respuesta completamente vacía: sin totales, sin códigos ni mensaje.
+        final bool isEmptyResponse =
+            !hasTotalsOrBatches &&
+            sdkResult == null &&
+            errorCode == null &&
+            (result.responseCode == null || result.responseCode!.isEmpty) &&
+            message.isEmpty;
+
+        // Guardar fecha del settlement exitoso (con o sin movimientos o respuesta vacía) ANTES del setState
+        if (isSuccess || isNoMovements || isEmptyResponse) {
+          SharedService.lastSettlementDate =
+              DateFormat('yyyy-MM-dd').format(DateTime.now());
         }
 
         setState(() {
-          // result == 0 significa éxito en DSL
-          if (result.result == 0) {
-            settlementResult = '''
-✅ CIERRE EXITOSO
-
-Total Ventas Débito: ${result.totalDebitCardSale ?? '0'}
-Total Ventas Crédito: ${result.totalCreditCardSale ?? '0'}
-Lote Débito: ${result.debitBatchNo ?? 'N/A'}
-Lote Crédito: ${result.creditBatchNo ?? 'N/A'}
-''';
+          if ((isSuccess || isEmptyResponse) && !isNoMovements) {
+            // Cierre exitoso (el detalle completo queda en el POS)
+            settlementResult = '✅ CIERRE EXITOSO';
             isBack = false;
             finished = true;
             isProcessing = false;
-          } else if (result.result == -1) {
-            // Cualquier error -1: No es necesario forzar cierre desde la app
+            noMovementsDetected = false;
+          } else if (isNoMovements) {
+            // Sin movimientos pendientes de cierre: se considera éxito funcional
             settlementResult = '''
-ℹ️ NO ES NECESARIO CERRAR DESDE LA APP
+ℹ️ SIN MOVIMIENTOS PENDIENTES
 
-El cierre de lote no pudo completarse desde la aplicación.
+El POS no tiene movimientos pendientes de cierre.
 
-Puede salir y cerrar manualmente desde la app del Banco si lo necesita.
+Puede continuar y cerrar la sesión normalmente.
 ''';
-            noMovementsDetected = true;
+            noMovementsDetected = false;
             isProcessing = false;
-            finished = false;
+            finished = true;
           } else {
-            // Error real - permitir reintento
-            settlementResult = 'ERROR: ${result.result} - ${result.responseMessage ?? 'Error desconocido'}';
-            ShowAlert(context, "CIERRE RECHAZADO: $settlementResult", 'error');
+            // Error real - permitir reintento (mostramos JSON crudo para depuración)
+            final String resultStr =
+                sdkResult != null ? sdkResult.toString() : 'desconocido';
+            final String codeStr =
+                result.responseCode ??
+                    (errorCode != null ? errorCode.toString() : 'desconocido');
+            final String msg = result.responseMessage ?? 'Error desconocido';
+
+            final rawJson = result.toJson().toString();
+
+            settlementResult = '''
+ERROR: $resultStr - $msg (code: $codeStr)
+
+RAW JSON:
+$rawJson
+''';
+
+            ShowAlert(
+              context,
+              "CIERRE RECHAZADO: $resultStr - $msg (code: $codeStr)",
+              'error',
+            );
             isProcessing = false;
             finished = false;
             noMovementsDetected = false;

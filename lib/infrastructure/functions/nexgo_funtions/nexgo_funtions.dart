@@ -63,20 +63,29 @@ class DoTransaction {
 
   Future<Object> doTransactionSettlement() async {
     try {
-      final String result = await platform.invokeMethod('doTransaction', {
-        'amount': '0',
-        'cardholderId': '0',
-        'waiterNum': '',
-        'referenceNo': '',
-        'transType': 4,
-      });
+      // Usamos el canal específico de settlement en Android
+      final String result = await platform.invokeMethod('doSettlement');
       final Map<String, dynamic> resultJson = jsonDecode(result);
-      SettlementResponse records = SettlementResponse.fromJson(resultJson);
+      final SettlementResponse records = SettlementResponse.fromJson(resultJson);
       return records;
     } on PlatformException catch (e) {
-      final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
-      SettlementResponse records2 = SettlementResponse.fromJson(resultJson2);
-      return records2;
+      // Si el nativo envía SETTLEMENT_FAILED, el mensaje también es JSON con el SettlementResponse
+      if (e.code == 'SETTLEMENT_FAILED') {
+        try {
+          final Map<String, dynamic> resultJson2 = jsonDecode(e.message!);
+          final SettlementResponse records2 = SettlementResponse.fromJson(resultJson2);
+          return records2;
+        } catch (_) {
+          throw Exception('Error procesando respuesta de cierre: ${e.message}');
+        }
+      }
+
+      // Errores de conexión o bind del servicio deben propagarse
+      if (e.code == 'SERVICE_NOT_BOUND' || e.code == 'REMOTE_EXCEPTION') {
+        throw Exception(e.message);
+      }
+
+      throw Exception('Error inesperado de cierre DSL: ${e.message}');
     }
   }
 }
