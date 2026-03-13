@@ -340,13 +340,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final dslLog = 'approvedByChannel=$approvedByChannel result=${sdkResult.result} errorCode=${sdkResult.errorCode} '
         'sdkSuccess=$sdkSuccess msg="${sdkResult.responseMessage}" code="${sdkResult.responseCode}"';
     FirebaseCrashlytics.instance.log('DSL_RESULT: $dslLog');
-    // Reporte no fatal para ver en Crashlytics los valores reales del SDK (éxito y rechazo), sin crash.
-    FirebaseCrashlytics.instance.recordError(
-      Exception('DSL_PAYMENT_RESULT'),
-      StackTrace.current,
-      reason: dslLog,
-      fatal: false,
-    );
+    // Reporte no fatal comentado para no generar issues por cada pago.
+    // FirebaseCrashlytics.instance.recordError(
+    //   Exception('DSL_PAYMENT_RESULT'),
+    //   StackTrace.current,
+    //   reason: dslLog,
+    //   fatal: false,
+    // );
 
     // Regla fija: si Android envió por result.error() (approvedByChannel==false), es rechazo/cancelado.
     // Solo consideramos éxito si el canal envió result.success() (approvedByChannel==true).
