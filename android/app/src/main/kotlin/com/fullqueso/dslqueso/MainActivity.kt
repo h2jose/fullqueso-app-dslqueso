@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.RemoteException
 import android.util.Log
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.gson.Gson
 import com.nexgo.oaf.apiv3.APIProxy
 import com.nexgo.oaf.apiv3.DeviceEngine
@@ -37,6 +38,11 @@ class MainActivity : FlutterActivity() {
     private var smartService: ISmartconnectService? = null
     private var deviceEngine: DeviceEngine? = null
     private var printer: Printer? = null
+
+    private fun logPrintOrden(message: String) {
+        FirebaseCrashlytics.getInstance().log("PRINT_ORDEN: $message")
+        Log.d("PRINT_ORDEN", message)
+    }
 
     // =====================================================================
     //  CONFIGURACIÓN DEL METHOD CHANNEL
@@ -479,9 +485,29 @@ class MainActivity : FlutterActivity() {
         result: MethodChannel.Result
     ) {
         try {
-            initPrinter()
+            logPrintOrden("inicio ticket=$ticket operador=$operador")
+            var attempts = 0
+            var currentPrinter: Printer? = null
+            while (attempts < 4 && currentPrinter == null) {
+                initPrinter()
+                currentPrinter = printer
+                logPrintOrden("init attempt=${attempts + 1} deviceEngine=${deviceEngine != null} printer=${currentPrinter != null}")
+                if (currentPrinter == null) {
+                    Thread.sleep(250)
+                }
+                attempts++
+            }
+            if (currentPrinter == null) {
+                logPrintOrden("printer null -> PRINTER_NOT_AVAILABLE")
+                result.error("PRINTER_NOT_AVAILABLE", "Impresora no disponible", null)
+                return
+            }
 
-            printer?.apply {
+            currentPrinter.apply {
+                setTypeface(Typeface.DEFAULT)
+                setLetterSpacing(6)
+                initPrinter()
+
                 appendPrnStr("================================", 24, AlignEnum.CENTER, false)
                 appendPrnStr("ORDEN $ticket", 28, AlignEnum.CENTER, true)
                 appendPrnStr("================================\n", 24, AlignEnum.CENTER, false)
@@ -492,18 +518,25 @@ class MainActivity : FlutterActivity() {
                 appendPrnStr("Fecha: $fechaHora", 24, AlignEnum.LEFT, false)
                 appendPrnStr("Operado por: $operador\n\n\n\n\n", 24, AlignEnum.LEFT, false)
 
+                logPrintOrden("startPrint invocado")
                 startPrint(false, object : OnPrintListener {
                     override fun onPrintResult(code: Int) {
-                        if (code == 0) {
-                            result.success("printed")
-                        } else {
-                            result.error("PRINT_ERROR", "Código: $code", null)
+                        logPrintOrden("onPrintResult code=$code")
+                        runOnUiThread {
+                            when (code) {
+                                0 -> result.success("printed")
+                                -1005 -> result.error("PRINT_ERROR", "Impresora sin papel", null)
+                                else -> result.error("PRINT_ERROR", "Código: $code", null)
+                            }
                         }
                     }
                 })
             }
-        } catch (e: Exception) {
-            result.error("PRINT_EXCEPTION", e.message, null)
+        } catch (t: Throwable) {
+            logPrintOrden("throwable ${t.javaClass.simpleName}: ${t.message}")
+            FirebaseCrashlytics.getInstance().recordException(t)
+            val code = if (t is UnsatisfiedLinkError) "PRINTER_NATIVE_LIB_MISSING" else "PRINT_EXCEPTION"
+            result.error(code, t.message, null)
         }
     }
 

@@ -907,7 +907,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  void _showPaymentBottomSheet(BuildContext context) {
+  void _showPaymentBottomSheet(BuildContext context) async {
     if (_cedulaController.text.isEmpty ||
             _nombreController.text.isEmpty ||
             _telefonoController.text.isEmpty
@@ -944,7 +944,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     checkout.totalToPay = getTotalAmount();
     checkout.totalToPayBs = getTotalAmountBs();
 
-    showModalBottomSheet(
+    final result = await showModalBottomSheet<CheckoutAltPaymentResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColor.backgroundLight,
@@ -961,5 +961,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
         );
       },
     );
+
+    final flowLog = 'Bottomsheet result success=${result?.success} '
+        'message="${result?.message}" warning=${result?.customerSaveWarning}';
+    FirebaseCrashlytics.instance.log('ALT_PAY_PARENT: $flowLog');
+
+    if (!mounted) return;
+    if (result?.success == true) {
+      ShowAlert(context, result?.message ?? "Orden procesada satisfactoriamente", 'success');
+      if (result?.customerSaveWarning == true && (result?.warningMessage?.isNotEmpty ?? false)) {
+        ShowAlert(context, result!.warningMessage!, 'error');
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const DashboardPage()),
+      );
+    } else {
+      ShowAlert(context, "No se completó el pago alternativo", 'error');
+    }
   }
 }

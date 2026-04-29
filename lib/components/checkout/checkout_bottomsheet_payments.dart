@@ -2,12 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:intl/intl.dart';
-
 import 'package:flutter/material.dart';
 import 'package:ubiiqueso/components/common/show_alert.dart';
 import 'package:ubiiqueso/models/checkout.dart';
-import 'package:ubiiqueso/pages/dashboard_page.dart';
 import 'package:ubiiqueso/services/customer_service.dart';
 import 'package:ubiiqueso/services/shared_service.dart';
 import 'package:ubiiqueso/theme/color.dart';
@@ -15,7 +14,20 @@ import 'package:ubiiqueso/utils/bank_data.dart';
 import 'package:ubiiqueso/utils/constants.dart';
 import 'package:ubiiqueso/utils/show_error_container.dart';
 import 'package:http/http.dart' as http;
-import 'package:ubiiqueso/infrastructure/functions/nexgo_funtions/nexgo_funtions.dart';
+
+class CheckoutAltPaymentResult {
+  final bool success;
+  final String? message;
+  final bool customerSaveWarning;
+  final String? warningMessage;
+
+  const CheckoutAltPaymentResult({
+    required this.success,
+    this.message,
+    this.customerSaveWarning = false,
+    this.warningMessage,
+  });
+}
 
 class CheckoutBottomsheetPayments extends StatefulWidget {
   final CheckoutModel checkout;
@@ -36,8 +48,6 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
   FirebaseFirestore db = FirebaseFirestore.instance;
   bool saving = false;
   bool loading = false;
-  final PrinterPos _printer = PrinterPos();
-
 
   // Pago movil
   String? _selectedBancoCode =  '0102';
@@ -65,6 +75,23 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
       _selectedTipo = checkout.customer?.tipo ?? 'V';
       _telefonoController.text = checkout.customer?.cel ?? '';
       _selectedPrefix = checkout.customer?.prefix ?? '0412';
+    }
+    _traceFlow('Bottomsheet inicializado');
+  }
+
+  void _traceFlow(String message, {Object? error, StackTrace? stackTrace}) {
+    final now = DateFormat('HH:mm:ss').format(DateTime.now());
+    final line = '[$now] $message';
+    log(line);
+    FirebaseCrashlytics.instance.log('ALT_PAY_FLOW: $line');
+
+    if (error != null) {
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        stackTrace ?? StackTrace.current,
+        reason: 'ALT_PAY_FLOW_ERROR: $line',
+        fatal: false,
+      );
     }
   }
 
@@ -241,8 +268,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
 
           setState(() {loading = false;});
 
-          await _imprimirOrdenServicio();
-          _processCheckout();
+          await _processCheckout();
           return;
 
 
@@ -272,12 +298,12 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
         checkout.paidZelleVaucher = _zelleReferenciaController.text;
         checkout.paidZelle = checkout.totalToPay;
       });
-      await _imprimirOrdenServicio();
-      _processCheckout();
+      await _processCheckout();
       return;
 
     } else if (_selectedPaymentMethod == 'Mostrador') {
       log('Pago en mostrador registrado como pendiente.');
+      _traceFlow('Mostrador: inicio de procesamiento');
         // _dialogPagoSinConciliar(timestamp);
 
       setState(() {
@@ -290,8 +316,10 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
         checkout.conciliacionBdv = ConciliacionBdv();
         checkout.isBdv = false;
       });
-      await _imprimirOrdenServicio();
-      _processCheckout();
+      _traceFlow('Mostrador: datos del checkout preparados');
+      _traceFlow('Mostrador: iniciando guardado de orden');
+      await _processCheckout();
+      _traceFlow('Mostrador: guardado completado');
         return;
     }
     log("cerrar bottomsheet");
@@ -352,8 +380,7 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
                   Navigator.of(dialogContext).pop();
                   // if (mounted) Navigator.of(context).pop(); // Keep this commented out or decide if it's needed based on flow
 
-                  await _imprimirOrdenServicio();
-                  _processCheckout();
+                  await _processCheckout();
                   },
                   child: const Text(
                   'CONTINUAR',
@@ -380,123 +407,58 @@ class _CheckoutBottomsheetPaymentsState extends State<CheckoutBottomsheetPayment
   }
 
   Future<void> _processCheckout() async {
+    bool customerSaveWarning = false;
+    String? warningMessage;
+
     if (mounted) {
       setState(() {
         saving = true;
       });
     }
     try {
+      _traceFlow('Checkout alternativo: preparando id de orden');
       // generar ID de ORDEN
       if (checkout.id != null && !checkout.id!.contains('_')) { // si no tiene guion bajo, significa que no se ha generado
         checkout.id = "${checkout.timestamp}_${checkout.customer?.cedula}";
       }
 
+      _traceFlow('Checkout alternativo: guardando orden en Firestore');
       await db.collection('orders').doc("${checkout.id}").set(checkout.toJson());
-      await saveCustomerService(checkout.customer!);
-      ShowAlert(context, "Orden procesada satisfactoriamente", 'success');
+      _traceFlow('Checkout alternativo: orden guardada');
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const DashboardPage()),
+      // Paso secundario no bloqueante: si falla actualización de cliente, no impedir cierre exitoso.
+      try {
+        _traceFlow('Checkout alternativo: actualizando cliente');
+        await saveCustomerService(checkout.customer!);
+        _traceFlow('Checkout alternativo: cliente actualizado');
+      } catch (e) {
+        customerSaveWarning = true;
+        warningMessage = 'Orden guardada, pero falló actualización de cliente.';
+        log('Warning saveCustomerService: $e');
+        _traceFlow('Checkout alternativo: warning al actualizar cliente', error: e);
+      }
+
+      if (!mounted) return;
+      _traceFlow('Checkout alternativo: cerrando bottomsheet con success=true');
+      Navigator.of(context).pop(
+        CheckoutAltPaymentResult(
+          success: true,
+          message: "Orden procesada satisfactoriamente",
+          customerSaveWarning: customerSaveWarning,
+          warningMessage: warningMessage,
+        ),
       );
     } catch (e) {
       log('Error: $e');
+      _traceFlow('Checkout alternativo: error guardando orden', error: e);
       ShowAlert(context, e.toString(), 'error');
     } finally {
-      setState(() {
-        saving = false;
-      });
-    }
-  }
-
-  Future<void> _imprimirOrdenServicio() async {
-    try {
-      // Formatear ticket (últimos 6 dígitos)
-      String ticket = checkout.ticket ?? '';
-      if (ticket.length > 6) {
-        ticket = ticket.substring(ticket.length - 6);
+      if (mounted) {
+        setState(() {
+          saving = false;
+        });
       }
-
-      // Formatear cliente (tipo-cedula)
-      String cedula = '${checkout.customer?.tipo ?? 'V'}-${checkout.customer?.cedula ?? ''}';
-      String cliente = '${checkout.customer?.name ?? ''}';
-
-      // Formatear fecha y hora actual
-      final now = DateTime.now();
-      String fechaHora = DateFormat('dd/MM/yyyy HH:mm').format(now);
-
-      print('DEBUG fechaHora generada: $fechaHora');
-
-      // Obtener operador
-      String operador = SharedService.operatorName;
-
-      // Imprimir orden de servicio
-      await _printer.imprimirOrdenServicio(ticket, cedula, cliente, fechaHora, operador);
-    } catch (e) {
-      log('Error imprimiendo orden de servicio: $e');
     }
-  }
-
-  Future<dynamic> _dialogAfterSave() {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            'Orden procesada satisfactoriamente',
-            textAlign: TextAlign.center,
-          ),
-          titleTextStyle: const TextStyle(
-            color: AppColor.primary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Ticket'),
-              Text(
-                checkout.ticket!.substring(checkout.ticket!.length - 6),
-                textScaler: const TextScaler.linear(1.5),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              /* const Text('Total Pagado Divisas'),
-              Text(
-                checkout.totalPaid!.toStringAsFixed(2),
-                textScaler: const TextScaler.linear(1.5),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const Text('Total Pagado Bs'),
-              Text(
-                checkout.totalPaidBs!.toStringAsFixed(2),
-                textScaler: const TextScaler.linear(1.5),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ), */
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                      builder: (context) => const DashboardPage()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColor.primary, // Background color
-                foregroundColor: Colors.white, // Text color
-                padding: const EdgeInsets.symmetric(vertical: 20.0),
-                textStyle:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                minimumSize:
-                    const Size(double.infinity, 50), // Full width button
-              ),
-              child: const Text('CONTINUAR'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override

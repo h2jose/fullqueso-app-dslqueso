@@ -12,6 +12,7 @@ plugins {
 dependencies {
   implementation platform('com.google.firebase:firebase-bom:33.13.0')
   implementation 'com.google.firebase:firebase-analytics'
+  implementation 'com.google.firebase:firebase-crashlytics'
 
   // DSL SDK Dependencies
   implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
@@ -71,7 +72,7 @@ android {
         minSdkVersion 24
         multiDexEnabled true
         targetSdkVersion 36
-        versionCode = 4
+        versionCode = 6
         versionName = flutter.versionName
     }
 

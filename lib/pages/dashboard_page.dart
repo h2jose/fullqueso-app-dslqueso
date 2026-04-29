@@ -423,6 +423,24 @@ class _DashboardPageState extends State<DashboardPage> {
         foregroundColor: Colors.white,
         backgroundColor: AppColor.primary,
         title: const TitleAppBarWidget(),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar productos',
+            onPressed: () async {
+              try {
+                await fetchProducts();
+              } catch (e) {
+                if (!context.mounted) return;
+                ShowAlert(
+                  context,
+                  'No se pudieron cargar los productos. Intente de nuevo.',
+                  'error',
+                );
+              }
+            },
+          ),
+        ],
       ),
       drawer: const DrawerWidget(),
       body: products.isEmpty
